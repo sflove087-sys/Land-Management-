@@ -52,7 +52,7 @@ import {
   Download
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import html2canvas from 'html2canvas';
+import { domToCanvas } from 'modern-screenshot';
 import { jsPDF } from 'jspdf';
 import { User, StatusFilter, INITIAL_USERS, SortConfig } from './types';
 import { getDaysLeft, getStatus, formatDate, getTimeRemaining, toBn, downloadCSV } from './utils';
@@ -629,13 +629,9 @@ export default function App() {
       // Small delay to ensure any transient UI states are settled
       await new Promise(resolve => setTimeout(resolve, 100));
       
-      const canvas = await html2canvas(element, {
+      const canvas = await domToCanvas(element, {
         scale: 3, // Very high quality for print
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-        windowWidth: element.scrollWidth,
-        windowHeight: element.scrollHeight
+        backgroundColor: '#ffffff'
       });
       
       const imgData = canvas.toDataURL('image/png');
