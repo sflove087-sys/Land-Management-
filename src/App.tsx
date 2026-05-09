@@ -34,7 +34,9 @@ import {
   TrendingUp,
   CircleCheck,
   Printer,
-  History
+  History,
+  CheckCircle2,
+  Save
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, StatusFilter, INITIAL_USERS, SortConfig } from './types';
@@ -105,8 +107,8 @@ const Countdown = ({ dateStr }: { dateStr: string }) => {
           { label: 'S', val: seconds },
         ].map((item, i) => (
           <div key={i} className="flex flex-col items-center min-w-[24px]">
-            <span className="text-[8px] font-black leading-none text-slate-800">{String(item.val).padStart(2, '0')}</span>
-            <span className="text-[7px] font-bold text-slate-400 mt-0.5">{item.label}</span>
+            <span className="text-[10px] font-black leading-none text-slate-800">{String(item.val).padStart(2, '0')}</span>
+            <span className="text-[8px] font-bold text-slate-400 mt-0.5">{item.label}</span>
           </div>
         ))}
       </div>
@@ -551,14 +553,14 @@ export default function App() {
       <main className="flex-1 lg:ml-72 p-6 lg:p-10 pb-32 md:pb-10">
         <div className="max-w-7xl mx-auto">
           {/* Top Bar */}
-          <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 md:mb-10 p-4 md:p-0 bg-white md:bg-transparent rounded-3xl md:rounded-0 shadow-sm md:shadow-none border border-slate-100 md:border-0 overflow-hidden">
+          <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-4 md:mb-10 p-3 md:p-0 bg-white md:bg-transparent rounded-2xl md:rounded-0 shadow-sm md:shadow-none border border-slate-100 md:border-0 overflow-hidden">
             <div className="flex items-center justify-between w-full md:w-auto">
               <div>
-                <h1 className="text-lg md:text-xl font-black text-bkash leading-tight tracking-tight">ড্যাশবোর্ড</h1>
-                <div className="flex items-center gap-2 mt-1">
-                  <p className="text-slate-400 text-[8px] font-bold uppercase tracking-wider hidden sm:block">চুক্তি ও পাওয়ার ব্যালেন্স ট্র্যাকিং</p>
+                <h1 className="text-lg md:text-2xl font-black text-bkash leading-tight tracking-tight">ড্যাশবোর্ড</h1>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <p className="text-slate-400 text-[9px] font-bold uppercase tracking-wider hidden sm:block">চুক্তি ও পাওয়ার ব্যালেন্স ট্র্যাকিং</p>
                   <span className="w-1 h-1 bg-slate-200 rounded-full hidden sm:block"></span>
-                  <p className="text-bkash text-[8px] font-black uppercase tracking-widest flex items-center gap-1">
+                  <p className="text-bkash text-[9px] font-black uppercase tracking-widest flex items-center gap-1">
                     <Clock className="w-3 h-3" /> {liveTime.toLocaleTimeString('bn-BD')}
                   </p>
                 </div>
@@ -590,7 +592,7 @@ export default function App() {
           </header>
 
           {/* Stats Grid */}
-          <section className="flex overflow-x-auto pb-4 mb-6 -mx-6 px-6 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 xl:grid-cols-5 gap-4 md:gap-6 md:mb-10 no-scrollbar">
+          <section className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 md:gap-6 mb-4 md:mb-10 px-0 sm:px-0">
             {[
               { label: 'মোট চুক্তির টাকা', val: stats.totalAmount.toLocaleString() + ' ৳', icon: Banknote, color: 'from-pink-500 to-bkash' },
               { label: 'মোট ইউজার', val: stats.totalUsers, icon: Users, color: 'from-fuchsia-500 to-pink-600' },
@@ -603,13 +605,13 @@ export default function App() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.1 }}
                 key={stat.label} 
-                className="min-w-[140px] sm:min-w-0 bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-all group flex-shrink-0 flex flex-col items-center text-center"
+                className={`bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all group flex flex-col items-center text-center ${i === 4 ? 'col-span-2 md:col-span-1' : ''}`}
               >
-                <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${stat.color} flex items-center justify-center text-white mb-3 shadow-lg shadow-pink-100 group-hover:scale-110 transition-transform`}>
-                  <stat.icon className="w-6 h-6" />
+                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${stat.color} flex items-center justify-center text-white mb-2 shadow-lg shadow-pink-100 group-hover:scale-110 transition-transform`}>
+                  <stat.icon className="w-5 h-5" />
                 </div>
-                <h3 className="text-lg md:text-xl font-black text-slate-800 tracking-tight">{stat.val}</h3>
-                <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-1">{stat.label}</p>
+                <h3 className="text-base sm:text-xl md:text-2xl font-black text-slate-800 tracking-tight">{stat.val}</h3>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{stat.label}</p>
               </motion.div>
             ))}
           </section>
@@ -623,7 +625,7 @@ export default function App() {
                 type="text" 
                 placeholder="নাম, মোবাইল বা ঠিকানা দিয়ে খুঁজুন..." 
                 aria-label="রেকর্ড খুঁজুন"
-                className="relative w-full pl-14 pr-5 py-4 bg-slate-50/50 border border-slate-100 rounded-[1.25rem] focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/5 transition-all outline-none text-[10px] font-bold shadow-sm placeholder:text-slate-300"
+                className="relative w-full pl-14 pr-5 py-4 bg-slate-50/50 border border-slate-100 rounded-[1.25rem] focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/5 transition-all outline-none text-xs font-bold shadow-sm placeholder:text-slate-300"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -677,178 +679,256 @@ export default function App() {
             </div>
           </div>
 
-          <div className="space-y-6">
+          <div className="space-y-4 md:space-y-6">
             {filteredUsers.length > 0 ? (
-              <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-slate-200/50 overflow-hidden">
-                <div className="overflow-x-auto no-scrollbar">
-                  <table className="w-full border-collapse border-spacing-0">
-                    <thead>
-                      <tr className="bg-slate-50/80 border-b border-slate-100/50">
-                        <th className="px-8 py-6 text-left">
-                          <div className="flex items-center gap-3">
-                            <div className="w-2 h-2 rounded-full bg-slate-200" />
-                            <span className="text-[8px] font-black uppercase tracking-[0.25em] text-slate-400">#</span>
+              <>
+                {/* Mobile Card View (shown below lg breakpoint) */}
+                <div className="grid grid-cols-1 gap-3 lg:hidden">
+                  <AnimatePresence mode="popLayout">
+                    {filteredUsers.map((user) => (
+                      <motion.div
+                        layout
+                        initial={{ opacity: 0, scale: 0.98 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.98 }}
+                        key={user.id}
+                        className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm overflow-hidden relative group"
+                      >
+                        <div className="flex justify-between items-start mb-3">
+                          <div className="flex items-center gap-2.5">
+                            <div className={`w-1.5 h-8 rounded-full ${
+                              getStatus(getDaysLeft(user.expireDate)) === 'active' ? 'bg-emerald-500' : getStatus(getDaysLeft(user.expireDate)) === 'warning' ? 'bg-amber-500' : 'bg-bkash'
+                            }`} />
+                            <div className="min-w-0">
+                              <h4 className="font-extrabold text-slate-800 uppercase tracking-tight text-[11px] truncate max-w-[170px]">
+                                {user.name}
+                              </h4>
+                              <div className="flex items-center gap-1.5 text-[9px] text-bkash font-black tracking-widest mt-0.5">
+                                <Phone className="w-2.5 h-2.5 shrink-0" />
+                                <span>{user.mobile}</span>
+                              </div>
+                            </div>
                           </div>
-                        </th>
-                        <th 
-                          className="px-4 py-6 text-left cursor-pointer group/th hover:bg-slate-100/50 transition-colors"
-                          onClick={(e) => toggleSort('name', e.shiftKey)}
-                          aria-sort={sortConfig.find(c => c.field === 'name')?.direction === 'asc' ? 'ascending' : sortConfig.find(c => c.field === 'name')?.direction === 'desc' ? 'descending' : 'none'}
-                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSort('name', e.shiftKey); } }}
-                          tabIndex={0}
-                          role="columnheader"
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="text-[8px] font-black uppercase tracking-[0.25em] text-slate-400 group-hover/th:text-bkash">ব্যবহারকারী তথ্য</span>
-                            {getSortIcon('name')}
+                          <div className="bg-bkash-light/20 text-bkash px-2.5 py-1 rounded-lg border border-bkash/5 font-black text-[10px]">
+                            {user.pwrBalance.toLocaleString()} ৳
                           </div>
-                        </th>
-                        <th 
-                          className="px-4 py-6 text-center cursor-pointer group/th hover:bg-slate-100/50 transition-colors"
-                          onClick={(e) => toggleSort('jomirPoriman', e.shiftKey)}
-                          aria-sort={sortConfig.find(c => c.field === 'jomirPoriman')?.direction === 'asc' ? 'ascending' : sortConfig.find(c => c.field === 'jomirPoriman')?.direction === 'desc' ? 'descending' : 'none'}
-                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSort('jomirPoriman', e.shiftKey); } }}
-                          tabIndex={0}
-                          role="columnheader"
-                        >
-                          <div className="flex items-center justify-center gap-2">
-                            <span className="text-[8px] font-black uppercase tracking-[0.25em] text-slate-400 group-hover/th:text-bkash">জমির পরিমাণ</span>
-                            {getSortIcon('jomirPoriman')}
-                          </div>
-                        </th>
-                        <th 
-                          className="px-4 py-6 text-center cursor-pointer group/th hover:bg-slate-100/50 transition-colors"
-                          onClick={(e) => toggleSort('amount', e.shiftKey)}
-                          aria-sort={sortConfig.find(c => c.field === 'amount')?.direction === 'asc' ? 'ascending' : sortConfig.find(c => c.field === 'amount')?.direction === 'desc' ? 'descending' : 'none'}
-                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSort('amount', e.shiftKey); } }}
-                          tabIndex={0}
-                          role="columnheader"
-                        >
-                          <div className="flex items-center justify-center gap-2">
-                            <span className="text-[8px] font-black uppercase tracking-[0.25em] text-slate-400 group-hover/th:text-bkash">ব্যালেন্স / কন্ট্রাক্ট</span>
-                            {getSortIcon('amount')}
-                          </div>
-                        </th>
-                        <th 
-                          className="px-4 py-6 text-center cursor-pointer group/th hover:bg-slate-100/50 transition-colors"
-                          onClick={(e) => toggleSort('expireDate', e.shiftKey)}
-                          aria-sort={sortConfig.find(c => c.field === 'expireDate')?.direction === 'asc' ? 'ascending' : sortConfig.find(c => c.field === 'expireDate')?.direction === 'desc' ? 'descending' : 'none'}
-                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSort('expireDate', e.shiftKey); } }}
-                          tabIndex={0}
-                          role="columnheader"
-                        >
-                          <div className="flex items-center justify-center gap-2">
-                            <span className="text-[8px] font-black uppercase tracking-[0.25em] text-slate-400 group-hover/th:text-bkash">সময়সীমা</span>
-                            {getSortIcon('expireDate')}
-                          </div>
-                        </th>
-                        <th className="px-8 py-6 text-right">
-                          <span className="text-[8px] font-black uppercase tracking-[0.25em] text-slate-400">কমান্ডস</span>
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50">
-                      <AnimatePresence mode="popLayout">
-                        {filteredUsers.map((user, idx) => {
-                          const daysLeft = getDaysLeft(user.expireDate);
-                          const status = getStatus(daysLeft);
-                          return (
-                            <motion.tr 
-                              layout
-                              initial={{ opacity: 0 }}
-                              animate={{ opacity: 1 }}
-                              exit={{ opacity: 0 }}
-                              key={user.id} 
-                              className="group hover:bg-slate-50/50 transition-all duration-300 relative"
-                            >
-                              <td className="px-8 py-6">
-                                <div className="flex items-center gap-3">
-                                  <div className={`w-1.5 h-6 rounded-full ${
-                                    status === 'active' ? 'bg-emerald-500' : status === 'warning' ? 'bg-amber-500' : 'bg-bkash'
-                                  }`} />
-                                  <span className="text-[9px] font-black text-slate-300 tabular-nums">{(idx + 1).toString().padStart(2, '0')}</span>
-                                </div>
-                              </td>
-                              <td className="px-4 py-6">
-                                <div className="flex flex-col gap-1 max-w-[200px]">
-                                  <h4 className="font-extrabold text-slate-800 uppercase tracking-tight text-[11px] group-hover:text-bkash transition-colors truncate">
-                                    {user.name}
-                                  </h4>
-                                  <div className="flex items-center gap-2 text-[8px] text-slate-400 font-bold">
-                                    <MapPin className="w-3 h-3 shrink-0" />
-                                    <span className="truncate">{user.address}</span>
-                                  </div>
-                                  <div className="flex items-center gap-2 text-[8px] text-bkash font-black tracking-widest mt-0.5">
-                                    <Phone className="w-3 h-3 shrink-0" />
-                                    <span>{user.mobile}</span>
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="px-4 py-6 text-center">
-                                <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-100">
-                                  <span className="font-black text-[10px] uppercase tracking-tighter">{user.jomirPoriman}</span>
-                                </div>
-                              </td>
-                              <td className="px-4 py-6">
-                                <div className="flex flex-col items-center gap-1">
-                                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-bkash-light/20 text-bkash rounded-xl border border-bkash/5">
-                                    <span className="text-[11px] font-black tabular-nums">{user.pwrBalance.toLocaleString()} ৳</span>
-                                  </div>
-                                  <span className="text-[7px] font-black text-slate-300 uppercase tracking-widest">টোটাল: {user.amount.toLocaleString()} ৳</span>
-                                </div>
-                              </td>
-                              <td className="px-4 py-6">
-                                <div className="flex flex-col items-center gap-2">
-                                  <div className="flex items-center gap-2 text-[10px] font-black text-slate-600 tracking-tight tabular-nums">
-                                    <Calendar className="w-3 h-3 text-slate-300" /> {formatDate(user.expireDate)}
-                                  </div>
-                                  <div className="scale-75 origin-top transition-transform group-hover:scale-90">
-                                    <Countdown dateStr={user.expireDate} />
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="px-8 py-6 text-right">
-                                <div className="flex items-center justify-end gap-2">
-                                  <motion.button 
-                                    whileHover={{ scale: 1.1, y: -2 }}
-                                    whileTap={{ scale: 0.9 }}
-                                    onClick={() => { setViewingUser(user); setViewMode('card'); setShowViewModal(true); }}
-                                    aria-label="কার্ড ভিউ"
-                                    className="h-10 px-4 bg-bkash text-white rounded-2xl text-[8px] font-black uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-bkash/20"
-                                  >
-                                    <CreditCard className="w-4 h-4" /> কার্ড
-                                  </motion.button>
-                                  <div className="flex gap-1.5">
-                                    {[
-                                      { icon: Eye, label: 'বিস্তারিত তথ্য', color: 'text-slate-400 hover:bg-slate-900 border-slate-100', onClick: () => { setViewingUser(user); setViewMode('details'); setShowViewModal(true); } },
-                                      { icon: HandCoins, label: 'টাকা সংগ্রহ', color: 'text-emerald-500 hover:bg-emerald-500 border-emerald-100', onClick: () => handleOpenCollection(user) },
-                                      { icon: Edit, label: 'তথ্য সম্পাদন', color: 'text-amber-500 hover:bg-amber-500 border-amber-100', onClick: () => { setEditingUser(user); setShowAddEditModal(true); } },
-                                      { icon: Trash2, label: 'ডিলিট করুন', color: 'text-rose-500 hover:bg-rose-500 border-rose-100', onClick: () => { setUserToDelete(user); setShowDeleteModal(true); } },
-                                    ].map((action, i) => (
-                                      <motion.button 
-                                        key={i}
-                                        whileHover={{ scale: 1.1, y: -2 }}
-                                        whileTap={{ scale: 0.9 }}
-                                        onClick={action.onClick}
-                                        aria-label={action.label}
-                                        className={`w-10 h-10 rounded-2xl border flex items-center justify-center transition-all bg-white hover:text-white ${action.color}`}
-                                      >
-                                        <action.icon className="w-4 h-4" />
-                                      </motion.button>
-                                    ))}
-                                  </div>
-                                </div>
-                              </td>
-                            </motion.tr>
-                          );
-                        })}
-                      </AnimatePresence>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ) : (
+                        </div>
 
+                        <div className="grid grid-cols-2 gap-3 mb-4 p-3 bg-slate-50/50 rounded-xl border border-slate-100/50">
+                          <div>
+                            <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5 flex items-center gap-1">
+                              <MapPin className="w-2.5 h-2.5 text-bkash" /> ঠিকানা
+                            </p>
+                            <p className="text-[9px] font-bold text-slate-600 truncate">{user.address}</p>
+                          </div>
+                          <div>
+                            <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5 flex items-center gap-1">
+                              <Calendar className="w-2.5 h-2.5 text-bkash" /> মেয়াদ শেষ
+                            </p>
+                            <p className="text-[9px] font-bold text-slate-600">{formatDate(user.expireDate)}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2.5 pt-3 border-t border-slate-100">
+                          <button 
+                            onClick={() => { setViewingUser(user); setViewMode('card'); setShowViewModal(true); }}
+                            className="flex-1 py-2.5 bg-bkash/5 text-bkash font-black uppercase tracking-widest text-[7px] rounded-lg flex items-center justify-center gap-1.5 border border-bkash/10"
+                          >
+                            <CreditCard className="w-3 h-3" /> কার্ড
+                          </button>
+                          <div className="flex gap-1.5">
+                            {[
+                              { icon: Eye, color: 'text-slate-400 bg-slate-50 border-slate-100', onClick: () => { setViewingUser(user); setViewMode('details'); setShowViewModal(true); } },
+                              { icon: HandCoins, color: 'text-emerald-500 bg-emerald-50 border-emerald-100', onClick: () => handleOpenCollection(user) },
+                              { icon: Edit, color: 'text-amber-500 bg-amber-50 border-amber-100', onClick: () => { setEditingUser(user); setShowAddEditModal(true); } },
+                              { icon: Trash2, color: 'text-rose-500 bg-rose-50 border-rose-100', onClick: () => { setUserToDelete(user); setShowDeleteModal(true); } },
+                            ].map((action, i) => (
+                              <button
+                                key={i}
+                                onClick={action.onClick}
+                                className={`w-8 h-8 rounded-lg border flex items-center justify-center transition-all ${action.color} active:scale-90`}
+                              >
+                                <action.icon className="w-3.5 h-3.5" />
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                </div>
+
+                {/* Desktop Table View (shown lg and above) */}
+                <div className="hidden lg:block bg-white rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-slate-200/50 overflow-hidden">
+                  <div className="overflow-x-auto no-scrollbar">
+                    <table className="w-full border-collapse border-spacing-0">
+                      <thead>
+                        <tr className="bg-slate-50/80 border-b border-slate-100/50">
+                          <th className="px-8 py-6 text-left">
+                            <div className="flex items-center gap-3">
+                              <div className="w-2 h-2 rounded-full bg-slate-200" />
+                              <span className="text-[8px] font-black uppercase tracking-[0.25em] text-slate-400">#</span>
+                            </div>
+                          </th>
+                          <th 
+                            className="px-4 py-6 text-left cursor-pointer group/th hover:bg-slate-100/50 transition-colors"
+                            onClick={(e) => toggleSort('name', e.shiftKey)}
+                            aria-sort={sortConfig.find(c => c.field === 'name')?.direction === 'asc' ? 'ascending' : sortConfig.find(c => c.field === 'name')?.direction === 'desc' ? 'descending' : 'none'}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSort('name', e.shiftKey); } }}
+                            tabIndex={0}
+                            role="columnheader"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-[8px] font-black uppercase tracking-[0.25em] text-slate-400 group-hover/th:text-bkash">ব্যবহারকারী তথ্য</span>
+                              {getSortIcon('name')}
+                            </div>
+                          </th>
+                          <th 
+                            className="px-4 py-6 text-center cursor-pointer group/th hover:bg-slate-100/50 transition-colors"
+                            onClick={(e) => toggleSort('jomirPoriman', e.shiftKey)}
+                            aria-sort={sortConfig.find(c => c.field === 'jomirPoriman')?.direction === 'asc' ? 'ascending' : sortConfig.find(c => c.field === 'jomirPoriman')?.direction === 'desc' ? 'descending' : 'none'}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSort('jomirPoriman', e.shiftKey); } }}
+                            tabIndex={0}
+                            role="columnheader"
+                          >
+                            <div className="flex items-center justify-center gap-2">
+                              <span className="text-[8px] font-black uppercase tracking-[0.25em] text-slate-400 group-hover/th:text-bkash">জমির পরিমাণ</span>
+                              {getSortIcon('jomirPoriman')}
+                            </div>
+                          </th>
+                          <th 
+                            className="px-4 py-6 text-center cursor-pointer group/th hover:bg-slate-100/50 transition-colors"
+                            onClick={(e) => toggleSort('amount', e.shiftKey)}
+                            aria-sort={sortConfig.find(c => c.field === 'amount')?.direction === 'asc' ? 'ascending' : sortConfig.find(c => c.field === 'amount')?.direction === 'desc' ? 'descending' : 'none'}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSort('amount', e.shiftKey); } }}
+                            tabIndex={0}
+                            role="columnheader"
+                          >
+                            <div className="flex items-center justify-center gap-2">
+                              <span className="text-[8px] font-black uppercase tracking-[0.25em] text-slate-400 group-hover/th:text-bkash">ব্যালেন্স / কন্ট্রাক্ট</span>
+                              {getSortIcon('amount')}
+                            </div>
+                          </th>
+                          <th 
+                            className="px-4 py-6 text-center cursor-pointer group/th hover:bg-slate-100/50 transition-colors"
+                            onClick={(e) => toggleSort('expireDate', e.shiftKey)}
+                            aria-sort={sortConfig.find(c => c.field === 'expireDate')?.direction === 'asc' ? 'ascending' : sortConfig.find(c => c.field === 'expireDate')?.direction === 'desc' ? 'descending' : 'none'}
+                            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSort('expireDate', e.shiftKey); } }}
+                            tabIndex={0}
+                            role="columnheader"
+                          >
+                            <div className="flex items-center justify-center gap-2">
+                              <span className="text-[8px] font-black uppercase tracking-[0.25em] text-slate-400 group-hover/th:text-bkash">সময়সীমা</span>
+                              {getSortIcon('expireDate')}
+                            </div>
+                          </th>
+                          <th className="px-8 py-6 text-right">
+                            <span className="text-[8px] font-black uppercase tracking-[0.25em] text-slate-400">কমান্ডস</span>
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        <AnimatePresence mode="popLayout">
+                          {filteredUsers.map((user, idx) => {
+                            const daysLeft = getDaysLeft(user.expireDate);
+                            const status = getStatus(daysLeft);
+                            return (
+                              <motion.tr 
+                                layout
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                key={user.id} 
+                                className="group hover:bg-slate-50/50 transition-all duration-300 relative"
+                              >
+                                <td className="px-8 py-6">
+                                  <div className="flex items-center gap-3">
+                                    <div className={`w-1.5 h-6 rounded-full ${
+                                      status === 'active' ? 'bg-emerald-500' : status === 'warning' ? 'bg-amber-500' : 'bg-bkash'
+                                    }`} />
+                                    <span className="text-[9px] font-black text-slate-300 tabular-nums">{(idx + 1).toString().padStart(2, '0')}</span>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-6">
+                                  <div className="flex flex-col gap-1 max-w-[200px]">
+                                    <h4 className="font-extrabold text-slate-800 uppercase tracking-tight text-[11px] group-hover:text-bkash transition-colors truncate">
+                                      {user.name}
+                                    </h4>
+                                    <div className="flex items-center gap-2 text-[8px] text-slate-400 font-bold">
+                                      <MapPin className="w-3 h-3 shrink-0" />
+                                      <span className="truncate">{user.address}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-[8px] text-bkash font-black tracking-widest mt-0.5">
+                                      <Phone className="w-3 h-3 shrink-0" />
+                                      <span>{user.mobile}</span>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-6 text-center">
+                                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-100">
+                                    <span className="font-black text-[10px] uppercase tracking-tighter">{user.jomirPoriman}</span>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-6">
+                                  <div className="flex flex-col items-center gap-1">
+                                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-bkash-light/20 text-bkash rounded-xl border border-bkash/5">
+                                      <span className="text-[11px] font-black tabular-nums">{user.pwrBalance.toLocaleString()} ৳</span>
+                                    </div>
+                                    <span className="text-[7px] font-black text-slate-300 uppercase tracking-widest">টোটাল: {user.amount.toLocaleString()} ৳</span>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-6">
+                                  <div className="flex flex-col items-center gap-2">
+                                    <div className="flex items-center gap-2 text-[10px] font-black text-slate-600 tracking-tight tabular-nums">
+                                      <Calendar className="w-3 h-3 text-slate-300" /> {formatDate(user.expireDate)}
+                                    </div>
+                                    <div className="scale-75 origin-top transition-transform group-hover:scale-90">
+                                      <Countdown dateStr={user.expireDate} />
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-8 py-6 text-right">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <motion.button 
+                                      whileHover={{ scale: 1.1, y: -2 }}
+                                      whileTap={{ scale: 0.9 }}
+                                      onClick={() => { setViewingUser(user); setViewMode('card'); setShowViewModal(true); }}
+                                      aria-label="কার্ড ভিউ"
+                                      className="h-10 px-4 bg-bkash text-white rounded-2xl text-[8px] font-black uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-bkash/20"
+                                    >
+                                      <CreditCard className="w-4 h-4" /> কার্ড
+                                    </motion.button>
+                                    <div className="flex gap-1.5">
+                                      {[
+                                        { icon: Eye, label: 'বিস্তারিত তথ্য', color: 'text-slate-400 hover:bg-slate-900 border-slate-100', onClick: () => { setViewingUser(user); setViewMode('details'); setShowViewModal(true); } },
+                                        { icon: HandCoins, label: 'টাকা সংগ্রহ', color: 'text-emerald-500 hover:bg-emerald-500 border-emerald-100', onClick: () => handleOpenCollection(user) },
+                                        { icon: Edit, label: 'তথ্য সম্পাদন', color: 'text-amber-500 hover:bg-amber-500 border-amber-100', onClick: () => { setEditingUser(user); setShowAddEditModal(true); } },
+                                        { icon: Trash2, label: 'ডিলিট করুন', color: 'text-rose-500 hover:bg-rose-50 border-rose-100', onClick: () => { setUserToDelete(user); setShowDeleteModal(true); } },
+                                      ].map((action, i) => (
+                                        <motion.button 
+                                          key={i}
+                                          whileHover={{ scale: 1.1, y: -2 }}
+                                          whileTap={{ scale: 0.9 }}
+                                          onClick={action.onClick}
+                                          aria-label={action.label}
+                                          className={`w-10 h-10 rounded-2xl border flex items-center justify-center transition-all bg-white hover:text-white ${action.color}`}
+                                        >
+                                          <action.icon className="w-4 h-4" />
+                                        </motion.button>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </td>
+                              </motion.tr>
+                            );
+                          })}
+                        </AnimatePresence>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            ) : (
               <motion.div 
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -958,8 +1038,16 @@ export default function App() {
                   disabled={isProcessing}
                   className="flex-1 py-4 bg-bkash text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-lg shadow-bkash/20 hover:bg-bkash-dark active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  {isProcessing && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-                  {isProcessing ? 'সংরক্ষণ করা হচ্ছে...' : 'তথ্য সংরক্ষণ করুন'}
+                  {isProcessing ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      সংরক্ষণ হচ্ছে...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" /> তথ্য সংরক্ষণ করুন
+                    </>
+                  )}
                 </button>
                 <button 
                   type="button" 
@@ -1286,8 +1374,16 @@ export default function App() {
                   disabled={isProcessing}
                   className="py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] shadow-lg shadow-emerald-100 hover:bg-emerald-700 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  {isProcessing && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-                  {isProcessing ? 'প্রসেসিং হচ্ছে...' : 'সংগ্রহ সম্পন্ন করুন'}
+                  {isProcessing ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      প্রসেসিং হচ্ছে...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" /> সংগ্রহ সম্পন্ন করুন
+                    </>
+                  )}
                 </button>
                 <button 
                   onClick={() => setShowCollectionModal(false)}
@@ -1408,15 +1504,15 @@ function Modal({ title, children, onClose, isLoading }: { title: string, childre
         onClick={(e) => e.stopPropagation()}
       >
         {isLoading && <ActionSpinner />}
-        <div className="flex justify-between items-center mb-6 sm:mb-8 sticky top-0 bg-white z-10 py-2 -mt-2">
-          <h2 id={modalId} className="text-md sm:text-lg font-black text-slate-800 tracking-tight">{title}</h2>
+        <div className="flex justify-between items-center mb-4 sm:mb-8 sticky top-0 bg-white z-10 py-1 sm:py-2 -mt-2">
+          <h2 id={modalId} className="text-sm sm:text-lg font-black text-slate-800 tracking-tight">{title}</h2>
           <button 
             disabled={isLoading}
             onClick={onClose} 
             aria-label="Close modal"
-            className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:bg-rose-50 hover:text-rose-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-7 h-7 sm:w-10 sm:h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:bg-rose-50 hover:text-rose-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <X className="w-4 h-4 sm:w-5 sm:h-5" />
+            <X className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
           </button>
         </div>
         <div className="pb-4 sm:pb-0">
