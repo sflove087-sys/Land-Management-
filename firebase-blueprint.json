@@ -1,0 +1,44 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A land management system user",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "User name" },
+        "address": { "type": "string", "description": "User address" },
+        "mobile": { "type": "string", "description": "Mobile number" },
+        "jomirPoriman": { "type": "string", "description": "Land size" },
+        "amount": { "type": "number", "description": "Contract amount" },
+        "expireDate": { "type": "string", "description": "Expiry date in ISO format" },
+        "pwrBalance": { "type": "number", "description": "Current balance" },
+        "chukirdharirName": { "type": "string", "description": "Contractor name" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "address", "mobile", "jomirPoriman", "amount", "expireDate", "pwrBalance", "chukirdharirName"]
+    },
+    "CollectionHistory": {
+      "title": "Collection History",
+      "description": "History of collections and extensions for a user",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string", "format": "date-time" },
+        "amount": { "type": "number" },
+        "monthsExtended": { "type": "number" },
+        "newExpiryDate": { "type": "string" }
+      },
+      "required": ["date", "amount", "monthsExtended", "newExpiryDate"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Collection of users"
+    },
+    "/users/{userId}/history/{historyId}": {
+      "schema": "CollectionHistory",
+      "description": "Subcollection of collection history for a specific user"
+    }
+  }
+}

@@ -1,0 +1,56 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Users collection
+    match /users/{userId} {
+      function isValidUser(data) {
+        return data.name is string && data.name.size() <= 200 &&
+               data.address is string && data.address.size() <= 500 &&
+               data.mobile is string && data.mobile.size() <= 20 &&
+               data.jomirPoriman is string && data.jomirPoriman.size() <= 100 &&
+               data.amount is number && data.amount >= 0 &&
+               data.expireDate is string && data.expireDate.size() <= 20 &&
+               data.pwrBalance is number &&
+               data.chukirdharirName is string && data.chukirdharirName.size() <= 200;
+      }
+
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidUser(request.resource.data);
+      allow update: if isSignedIn() && isValidUser(request.resource.data);
+      allow delete: if isSignedIn();
+
+      // History subcollection
+      match /history/{historyId} {
+        function isValidHistory(data) {
+          return data.date is string &&
+                 data.amount is number &&
+                 data.monthsExtended is number &&
+                 data.newExpiryDate is string;
+        }
+
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() && isValidHistory(request.resource.data);
+        allow update: if false; // History is immutable typically
+        allow delete: if isSignedIn();
+      }
+    }
+  }
+}
