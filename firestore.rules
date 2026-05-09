@@ -22,7 +22,8 @@ service cloud.firestore {
     // Users collection
     match /users/{userId} {
       function isValidUser(data) {
-        return data.name is string && data.name.size() <= 200 &&
+        return data.keys().hasAll(['name', 'address', 'mobile', 'jomirPoriman', 'amount', 'expireDate', 'pwrBalance', 'chukirdharirName']) &&
+               data.name is string && data.name.size() <= 200 &&
                data.address is string && data.address.size() <= 500 &&
                data.mobile is string && data.mobile.size() <= 20 &&
                data.jomirPoriman is string && data.jomirPoriman.size() <= 100 &&
@@ -32,24 +33,26 @@ service cloud.firestore {
                data.chukirdharirName is string && data.chukirdharirName.size() <= 200;
       }
 
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && isValidUser(request.resource.data);
-      allow update: if isSignedIn() && isValidUser(request.resource.data);
-      allow delete: if isSignedIn();
+      function isVerified() {
+        return isSignedIn() && request.auth.token.email_verified == true;
+      }
 
-      // History subcollection
+      allow read: if isVerified();
+      allow create: if isVerified() && isValidUser(request.resource.data);
+      allow update: if isVerified() && (
+        // Action: Edit Profile
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'address', 'mobile', 'jomirPoriman', 'amount', 'expireDate', 'pwrBalance', 'chukirdharirName']) && isValidUser(request.resource.data)) ||
+        // Action: Collect / Extend
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['expireDate', 'pwrBalance', 'history']) && 
+         request.resource.data.expireDate is string &&
+         request.resource.data.pwrBalance is number &&
+         request.resource.data.history is list)
+      );
+      allow delete: if isVerified();
+
+      // Legacy history subcollection rule (kept for safety if we migrate later)
       match /history/{historyId} {
-        function isValidHistory(data) {
-          return data.date is string &&
-                 data.amount is number &&
-                 data.monthsExtended is number &&
-                 data.newExpiryDate is string;
-        }
-
-        allow read: if isSignedIn();
-        allow create: if isSignedIn() && isValidHistory(request.resource.data);
-        allow update: if false; // History is immutable typically
-        allow delete: if isSignedIn();
+        allow read, write: if isVerified();
       }
     }
   }

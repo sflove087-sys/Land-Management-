@@ -48,9 +48,12 @@ import {
   User as UserIcon,
   Gavel,
   ScrollText,
-  UserCheck
+  UserCheck,
+  Download
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
 import { User, StatusFilter, INITIAL_USERS, SortConfig } from './types';
 import { getDaysLeft, getStatus, formatDate, getTimeRemaining, toBn, downloadCSV } from './utils';
 import { ChevronUp, ChevronDown, ArrowUpDown, LogIn, LogOut } from 'lucide-react';
@@ -79,64 +82,86 @@ const ActionSpinner = ({ isSuccess = false, isError = false }: { isSuccess?: boo
     <div className="relative w-32 h-32 flex items-center justify-center">
       {/* 3D Blue Moving Elements */}
       {!isSuccess && !isError && (
-        <div className="relative w-full h-full">
+        <div className="relative w-full h-full perspective-1000">
           <motion.div
             animate={{ 
               rotateX: [0, 360], 
               rotateY: [0, 360],
-              scale: [1, 1.1, 1]
+              scale: [1, 1.2, 1]
             }}
             transition={{ repeat: Infinity, duration: 4, ease: "linear" }}
-            className="absolute inset-0 border-[6px] border-bkash/20 rounded-full shadow-[0_0_30px_rgba(226,19,110,0.2)]"
+            className="absolute inset-0 border-[8px] border-blue-500/20 rounded-full shadow-[0_0_50px_rgba(59,130,246,0.3)] border-t-blue-500"
           />
           <motion.div
             animate={{ 
               rotateX: [360, 0], 
               rotateY: [0, 360],
-              scale: [1.1, 1, 1.1]
+              scale: [1.2, 1, 1.2]
             }}
             transition={{ repeat: Infinity, duration: 3, ease: "linear" }}
-            className="absolute inset-4 border-[4px] border-blue-500 rounded-full shadow-[0_0_20px_rgba(59,130,246,0.3)]"
+            className="absolute inset-4 border-[6px] border-bkash/20 rounded-full shadow-[0_0_30px_rgba(226,19,110,0.3)] border-b-bkash"
           />
           <motion.div
             animate={{ 
-              y: [-10, 10, -10],
-              rotateZ: [0, 360]
+              y: [-15, 15, -15],
+              rotateX: [0, 45, -45, 0],
+              rotateY: [0, 360]
             }}
-            transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
-            className="absolute inset-10 bg-gradient-to-tr from-bkash to-blue-600 rounded-2xl shadow-2xl flex items-center justify-center"
+            transition={{ repeat: Infinity, duration: 2.5, ease: "easeInOut" }}
+            className="absolute inset-8 bg-gradient-to-br from-blue-600 via-blue-500 to-bkash rounded-3xl shadow-[0_20px_50px_rgba(37,99,235,0.4)] flex items-center justify-center border-2 border-white/20 backdrop-blur-sm"
           >
-            <Landmark className="w-8 h-8 text-white" />
+            <div className="relative">
+               <Landmark className="w-10 h-10 text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.3)]" />
+               <motion.div 
+                 animate={{ opacity: [0, 1, 0], scale: [0.8, 1.2, 0.8] }}
+                 transition={{ repeat: Infinity, duration: 2 }}
+                 className="absolute -inset-2 bg-white/20 rounded-full blur-md"
+               />
+            </div>
           </motion.div>
+          
+          {/* Orbital dots */}
+          {[0, 120, 240].map((angle) => (
+            <motion.div
+              key={`orbit-${angle}`}
+              animate={{ 
+                rotate: [angle, angle + 360],
+              }}
+              transition={{ repeat: Infinity, duration: 3, ease: "linear" }}
+              className="absolute inset-0"
+            >
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3 h-3 bg-blue-400 rounded-full shadow-[0_0_15px_rgba(96,165,250,0.8)]" />
+            </motion.div>
+          ))}
         </div>
       )}
 
       {isSuccess && (
         <motion.div 
-          initial={{ scale: 0 }}
-          animate={{ scale: 1, rotate: 360 }}
-          className="w-24 h-24 bg-emerald-500 rounded-full flex items-center justify-center shadow-2xl shadow-emerald-200"
+          initial={{ scale: 0, rotateY: 180 }}
+          animate={{ scale: 1, rotateY: 360 }}
+          className="w-24 h-24 bg-emerald-500 rounded-full flex items-center justify-center shadow-[0_20px_50px_rgba(16,185,129,0.4)] border-4 border-white/20"
         >
           <motion.div
-            animate={{ scale: [1, 1.2, 1] }}
+            animate={{ scale: [1, 1.2, 1], rotateZ: [0, 10, -10, 0] }}
             transition={{ repeat: Infinity, duration: 2 }}
           >
-            <CheckCircle2 className="w-12 h-12 text-white" />
+            <CheckCircle2 className="w-12 h-12 text-white drop-shadow-md" />
           </motion.div>
         </motion.div>
       )}
 
       {isError && (
         <motion.div 
-          initial={{ scale: 0 }}
-          animate={{ scale: 1, rotate: -10 }}
-          className="w-24 h-24 bg-rose-500 rounded-full flex items-center justify-center shadow-2xl shadow-rose-200"
+          initial={{ scale: 0, rotateX: 180 }}
+          animate={{ scale: 1, rotateX: 0 }}
+          className="w-24 h-24 bg-rose-500 rounded-full flex items-center justify-center shadow-[0_20px_50px_rgba(244,63,94,0.4)] border-4 border-white/20"
         >
           <motion.div
-            animate={{ x: [-2, 2, -2] }}
-            transition={{ repeat: Infinity, duration: 0.2 }}
+            animate={{ x: [-3, 3, -3], rotateZ: [-10, 10, -10] }}
+            transition={{ repeat: Infinity, duration: 0.3 }}
           >
-            <X className="w-12 h-12 text-white" />
+            <X className="w-12 h-12 text-white drop-shadow-md" />
           </motion.div>
         </motion.div>
       )}
@@ -155,7 +180,7 @@ const ActionSpinner = ({ isSuccess = false, isError = false }: { isSuccess?: boo
         <div className="flex gap-2">
           {[0, 1, 2].map((i) => (
             <motion.div
-              key={i}
+              key={`dot-${i}`}
               animate={{ 
                 scale: [1, 2, 1], 
                 backgroundColor: ["#e2136e", "#3b82f6", "#e2136e"],
@@ -169,7 +194,7 @@ const ActionSpinner = ({ isSuccess = false, isError = false }: { isSuccess?: boo
       )}
       
       {(isSuccess || isError) && (
-        <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">
+        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
           {isSuccess ? 'ধন্যবাদ, আপনার অনুরোধটি সম্পন্ন হয়েছে' : 'দুঃখিত, কোনো একটি সমস্যা হয়েছে'}
         </p>
       )}
@@ -197,8 +222,8 @@ const Countdown = ({ dateStr, compact }: { dateStr: string, compact?: boolean })
     ];
     return (
       <div className="flex items-center gap-1">
-        {units.map((u, i) => (
-          <div key={i} className="flex flex-col items-center">
+        {units.map((u) => (
+          <div key={`unit-compact-${u.label}`} className="flex flex-col items-center">
             <span className={`text-[10px] font-black leading-none ${u.label === 'দিন' ? 'text-bkash' : 'text-slate-700'}`}>
               {toBn(String(u.value).padStart(2, '0'))}
             </span>
@@ -218,8 +243,8 @@ const Countdown = ({ dateStr, compact }: { dateStr: string, compact?: boolean })
 
   return (
     <div className="flex items-center gap-1.5 md:gap-2">
-      {units.map((u, i) => (
-        <div key={i} className="flex flex-col items-center">
+      {units.map((u) => (
+        <div key={`unit-normal-${u.label}`} className="flex flex-col items-center">
           <div className={`w-9 h-9 md:w-11 md:h-11 rounded-full border-2 flex flex-col items-center justify-center transition-all ${
             u.label === 'দিন' 
               ? 'border-bkash bg-bkash/5' 
@@ -471,7 +496,7 @@ export default function App() {
     const formData = new FormData(form);
     setIsProcessing(true);
     // Artificial delay for user request
-    await new Promise(resolve => setTimeout(resolve, 20000));
+    await new Promise(resolve => setTimeout(resolve, 1000));
     
     const userData = {
       name: formData.get('name') as string,
@@ -491,7 +516,7 @@ export default function App() {
         await addDoc(collection(db, 'users'), userData);
       }
       setIsSuccess(true);
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await new Promise(resolve => setTimeout(resolve, 2000));
       setIsSuccess(false);
       setIsProcessing(false);
       setShowAddEditModal(false);
@@ -508,11 +533,11 @@ export default function App() {
   const deleteUser = async (id: string) => {
     setIsProcessing(true);
     // Artificial delay for user request
-    await new Promise(resolve => setTimeout(resolve, 20000));
+    await new Promise(resolve => setTimeout(resolve, 1000));
     try {
       await deleteDoc(doc(db, 'users', id));
       setIsSuccess(true);
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await new Promise(resolve => setTimeout(resolve, 2000));
       setIsSuccess(false);
       setShowDeleteModal(false);
       setUserToDelete(null);
@@ -530,7 +555,7 @@ export default function App() {
     if (!collectingUser || !extendMonths || !collectionAmount) return;
     setIsProcessing(true);
     // Artificial delay for user request
-    await new Promise(resolve => setTimeout(resolve, 20000));
+    await new Promise(resolve => setTimeout(resolve, 1000));
     
     const months = parseInt(extendMonths);
     const cost = parseFloat(collectionAmount);
@@ -561,7 +586,7 @@ export default function App() {
       });
       
       setIsSuccess(true);
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await new Promise(resolve => setTimeout(resolve, 2000));
       setIsSuccess(false);
       setIsProcessing(false);
       setShowCollectionModal(false);
@@ -588,17 +613,62 @@ export default function App() {
     window.print();
     setIsProcessing(true);
     // Artificial delay for user request
-    await new Promise(resolve => setTimeout(resolve, 20000));
+    await new Promise(resolve => setTimeout(resolve, 1000));
     setIsSuccess(true);
-    await new Promise(resolve => setTimeout(resolve, 5000));
+    await new Promise(resolve => setTimeout(resolve, 2000));
     setIsSuccess(false);
     setIsProcessing(false);
+  };
+
+  const handleDownloadPDF = async () => {
+    const element = document.getElementById('print-area');
+    if (!element || !viewingUser) return;
+
+    setIsProcessing(true);
+    try {
+      // Small delay to ensure any transient UI states are settled
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      const canvas = await html2canvas(element, {
+        scale: 3, // Very high quality for print
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        windowWidth: element.scrollWidth,
+        windowHeight: element.scrollHeight
+      });
+      
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'p',
+        unit: 'mm',
+        format: 'a4'
+      });
+      
+      const imgProps = pdf.getImageProperties(imgData);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      
+      // If the content is longer than one page, we might need multiple pages or scaling
+      // For now, we'll scale it to fit the width of A4
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`${viewingUser.name}_${viewMode}_${new Date().getTime()}.pdf`);
+      
+      setIsSuccess(true);
+      setTimeout(() => setIsSuccess(false), 2000);
+    } catch (err) {
+      console.error('PDF generation failed:', err);
+      setIsError(true);
+      setTimeout(() => setIsError(false), 2000);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleLogout = async () => {
     setIsProcessing(true);
     // Artificial delay for user request
-    await new Promise(resolve => setTimeout(resolve, 20000));
+    await new Promise(resolve => setTimeout(resolve, 1000));
     try {
       await firebaseLogout();
       setIsSuccess(true);
@@ -640,11 +710,11 @@ export default function App() {
             onClick={async () => {
               setIsProcessing(true);
               // Artificial delay for user request
-              await new Promise(resolve => setTimeout(resolve, 20000));
+              await new Promise(resolve => setTimeout(resolve, 1000));
               try {
                 await signInWithGoogle();
                 setIsSuccess(true);
-                await new Promise(resolve => setTimeout(resolve, 3000));
+                await new Promise(resolve => setTimeout(resolve, 2000));
                 setIsSuccess(false);
               } catch (error: any) {
                 console.error("Login failed:", error);
@@ -671,8 +741,20 @@ export default function App() {
   }
 
   return (
-    <div className="flex min-h-screen text-[8px] bg-slate-50 overflow-x-hidden w-full max-w-full">
+    <div className="flex min-h-screen text-[10px] bg-slate-50 overflow-x-hidden w-full max-w-full">
       <AnimatePresence>
+        {isProcessing && !showAddEditModal && !showDeleteModal && !showCollectionModal && !showReportsModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] flex items-center justify-center pointer-events-none"
+          >
+             <div className="pointer-events-auto">
+               <ActionSpinner isSuccess={isSuccess} isError={isError} />
+             </div>
+          </motion.div>
+        )}
         {isLoading && (
           <motion.div 
             initial={{ opacity: 1 }}
@@ -694,7 +776,7 @@ export default function App() {
             </div>
             <div>
               <h2 className="text-xl font-black text-bkash tracking-tight">bKash Manager</h2>
-              <p className="text-[8px] text-slate-400 font-bold uppercase tracking-wider">Professional System</p>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Professional System</p>
             </div>
           </div>
         </div>
@@ -750,9 +832,9 @@ export default function App() {
               <div className="min-w-0">
                 <h1 className="text-xl md:text-3xl font-black text-slate-800 leading-none tracking-tighter">ড্যাশবোর্ড</h1>
                 <div className="flex items-center gap-2 mt-1.5 overflow-hidden">
-                  <p className="text-slate-400 text-[8px] font-bold uppercase tracking-widest truncate hidden sm:block">চুক্তি ও পাওয়ার ব্যালেন্স ট্র্যাকিং</p>
+                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest truncate hidden sm:block">চুক্তি ও পাওয়ার ব্যালেন্স ট্র্যাকিং</p>
                   <span className="w-1 h-1 bg-slate-200 rounded-full hidden sm:block"></span>
-              <p className="text-bkash text-[8px] font-black uppercase tracking-widest flex items-center gap-1 shrink-0">
+              <p className="text-bkash text-[10px] font-black uppercase tracking-widest flex items-center gap-1 shrink-0">
                 <Clock className="w-3 h-3" /> {liveTime.toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
               </p>
                 </div>
@@ -810,7 +892,7 @@ export default function App() {
                   <stat.icon className="w-5 h-5" />
                 </div>
                 <h3 className="text-[12px] sm:text-lg md:text-xl font-black text-slate-800 tracking-tight">{stat.val}</h3>
-                <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{stat.label}</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{stat.label}</p>
               </motion.div>
             ))}
           </section>
@@ -824,7 +906,7 @@ export default function App() {
                 type="text" 
                 placeholder="নাম, মোবাইল বা ঠিকানা দিয়ে খুঁজুন..." 
                 aria-label="রেকর্ড খুঁজুন"
-                className="relative w-full pl-14 pr-5 py-4 bg-slate-50/50 border border-slate-100 rounded-[1.25rem] focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/5 transition-all outline-none text-[8px] font-bold shadow-sm placeholder:text-slate-300 truncate"
+                className="relative w-full pl-14 pr-5 py-4 bg-slate-50/50 border border-slate-100 rounded-[1.25rem] focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/5 transition-all outline-none text-[10px] font-bold shadow-sm placeholder:text-slate-300 truncate"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -901,7 +983,7 @@ export default function App() {
                               getStatus(getDaysLeft(user.expireDate)) === 'active' ? 'bg-emerald-500' : getStatus(getDaysLeft(user.expireDate)) === 'warning' ? 'bg-amber-500' : 'bg-bkash'
                             }`} />
                             <div className="min-w-0">
-                              <h4 className="font-extrabold text-slate-800 uppercase tracking-tight text-[8px] truncate max-w-[170px]">
+                              <h4 className="font-extrabold text-slate-800 uppercase tracking-tight text-[10px] truncate max-w-[170px]">
                                 {user.name}
                               </h4>
                               <div className="flex items-center gap-1.5 text-[9px] text-bkash font-black tracking-widest mt-0.5">
@@ -910,24 +992,24 @@ export default function App() {
                               </div>
                             </div>
                           </div>
-                          <div className="bg-bkash-light/20 text-bkash px-2.5 py-1 rounded-lg border border-bkash/5 font-black text-[8px]">
+                          <div className="bg-bkash-light/20 text-bkash px-2.5 py-1 rounded-lg border border-bkash/5 font-black text-[10px]">
                             {toBn(user.pwrBalance.toLocaleString())} ৳
                           </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-3 mb-4 p-3 bg-slate-50/50 rounded-xl border border-slate-100/50">
                           <div>
-                            <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5 flex items-center gap-1">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5 flex items-center gap-1">
                               <MapPin className="w-2.5 h-2.5 text-bkash" /> ঠিকানা
                             </p>
-                            <p className="text-[9px] font-bold text-slate-600 truncate">{user.address}</p>
+                            <p className="text-[10px] font-bold text-slate-600 truncate">{user.address}</p>
                           </div>
                           <div className="flex flex-col gap-1">
-                            <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5 flex items-center gap-1">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5 flex items-center gap-1">
                               <Calendar className="w-2.5 h-2.5 text-bkash" /> মেয়াদ শেষ
                             </p>
                             <div className="flex items-center gap-3">
-                              <p className="text-[8px] font-black text-slate-800 leading-none">{formatDate(user.expireDate)}</p>
+                              <p className="text-[10px] font-black text-slate-800 leading-none">{formatDate(user.expireDate)}</p>
                               <div className="scale-[0.85] origin-left border-l border-slate-200 pl-3">
                                 <Countdown dateStr={user.expireDate} compact />
                               </div>
@@ -938,7 +1020,7 @@ export default function App() {
                         <div className="flex items-center justify-between gap-2.5 pt-3 border-t border-slate-100">
                           <button 
                             onClick={() => { setViewingUser(user); setViewMode('card'); setShowViewModal(true); }}
-                            className="flex-1 py-2.5 bg-bkash/5 text-bkash font-black uppercase tracking-widest text-[7px] rounded-lg flex items-center justify-center gap-1.5 border border-bkash/10"
+                            className="flex-1 py-2.5 bg-bkash/5 text-bkash font-black uppercase tracking-widest text-[10px] rounded-lg flex items-center justify-center gap-1.5 border border-bkash/10"
                           >
                             <CreditCard className="w-3 h-3" /> কার্ড
                           </button>
@@ -974,7 +1056,7 @@ export default function App() {
                           <th className="px-8 py-6 text-left">
                             <div className="flex items-center gap-3">
                               <div className="w-2 h-2 rounded-full bg-slate-200" />
-                              <span className="text-[8px] font-black uppercase tracking-[0.25em] text-slate-400">#</span>
+                              <span className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">#</span>
                             </div>
                           </th>
                           <th 
@@ -986,7 +1068,7 @@ export default function App() {
                             role="columnheader"
                           >
                             <div className="flex items-center gap-2">
-                              <span className="text-[8px] font-black uppercase tracking-[0.25em] text-slate-400 group-hover/th:text-bkash">ব্যবহারকারী তথ্য</span>
+                              <span className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400 group-hover/th:text-bkash">ব্যবহারকারী তথ্য</span>
                               {getSortIcon('name')}
                             </div>
                           </th>
@@ -999,7 +1081,7 @@ export default function App() {
                             role="columnheader"
                           >
                             <div className="flex items-center justify-center gap-2">
-                              <span className="text-[8px] font-black uppercase tracking-[0.25em] text-slate-400 group-hover/th:text-bkash">জমির পরিমাণ</span>
+                              <span className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400 group-hover/th:text-bkash">জমির পরিমাণ</span>
                               {getSortIcon('jomirPoriman')}
                             </div>
                           </th>
@@ -1012,7 +1094,7 @@ export default function App() {
                             role="columnheader"
                           >
                             <div className="flex items-center justify-center gap-2">
-                              <span className="text-[8px] font-black uppercase tracking-[0.25em] text-slate-400 group-hover/th:text-bkash">ব্যালেন্স / কন্ট্রাক্ট</span>
+                              <span className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400 group-hover/th:text-bkash">ব্যালেন্স / কন্ট্রাক্ট</span>
                               {getSortIcon('amount')}
                             </div>
                           </th>
@@ -1025,12 +1107,12 @@ export default function App() {
                             role="columnheader"
                           >
                             <div className="flex items-center justify-center gap-2">
-                              <span className="text-[8px] font-black uppercase tracking-[0.25em] text-slate-400 group-hover/th:text-bkash">সময়সীমা</span>
+                              <span className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400 group-hover/th:text-bkash">সময়সীমা</span>
                               {getSortIcon('expireDate')}
                             </div>
                           </th>
                           <th className="px-8 py-6 text-right">
-                            <span className="text-[8px] font-black uppercase tracking-[0.25em] text-slate-400">কমান্ডস</span>
+                            <span className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">কমান্ডস</span>
                           </th>
                         </tr>
                       </thead>
@@ -1214,6 +1296,10 @@ export default function App() {
                 <input name="name" required defaultValue={editingUser?.name} placeholder="যেমন: মোঃ রহিম মিয়া" className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-[8px] font-bold" />
               </div>
               <div className="space-y-1.5">
+                <label className="text-[8px] font-bold text-slate-400 uppercase flex items-center gap-1.5"><UserCheck className="w-3 h-3" /> চুক্তিধারীর নাম *</label>
+                <input name="chukirdharirName" required defaultValue={editingUser?.chukirdharirName} placeholder="যেমন: মোঃ শাহিন" className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-[8px] font-bold" />
+              </div>
+              <div className="space-y-1.5">
                 <label className="text-[8px] font-bold text-slate-400 uppercase flex items-center gap-1.5"><Phone className="w-3 h-3" /> মোবাইল নম্বর *</label>
                 <input name="mobile" required defaultValue={editingUser?.mobile} placeholder="01XXXXXXXXX" className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-[8px] font-bold" />
               </div>
@@ -1360,7 +1446,7 @@ export default function App() {
                       </h4>
                       <div className="space-y-2.5 max-h-[250px] overflow-y-auto pr-2 custom-scrollbar">
                         {[...viewingUser.history].reverse().map((h, idx) => (
-                          <div key={idx} className="bg-white border border-slate-100 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-bkash/10 transition-colors group">
+                          <div key={`hist-details-${idx}-${h.date}`} className="bg-white border border-slate-100 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-bkash/10 transition-colors group">
                             <div className="flex items-center gap-3">
                               <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-400 group-hover:text-bkash transition-colors">
                                 <Calendar className="w-4 h-4" />
@@ -1391,33 +1477,35 @@ export default function App() {
                   )}
                 </div>
               ) : viewMode === 'card' ? (
-                <div id="print-card" className="w-[350px] max-w-full mx-auto bg-white border-2 border-slate-900 rounded-sm p-6 overflow-hidden">
-                  <div className="flex border-b border-slate-900 pb-3 mb-4 justify-between items-center text-slate-800">
+                <div id="print-card" className="w-[320px] max-w-[90vw] mx-auto bg-white border-[3px] border-slate-900 rounded-sm p-5 shadow-2xl relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-20 h-20 bg-slate-900/5 rounded-full -translate-y-1/2 translate-x-1/2" />
+                  <div className="flex border-b-2 border-slate-900 pb-3 mb-4 justify-between items-center text-slate-800">
                     <div className="flex items-center gap-2">
-                      <Landmark className="w-5 h-5" />
-                      <span className="text-[10px] font-black uppercase tracking-[0.2em]">অফিসিয়াল কার্ড</span>
+                      <Landmark className="w-5 h-5 text-bkash" />
+                      <span className="text-[9px] font-black uppercase tracking-[0.2em]">অফিসিয়াল কার্ড</span>
                     </div>
-                    <span className="text-[10px] font-black uppercase">আইডি: {toBn(viewingUser.id.slice(-6).toUpperCase())}</span>
+                    <span className="text-[9px] font-black uppercase tracking-widest">আইডি: {toBn(viewingUser.id.slice(-6).toUpperCase())}</span>
                   </div>
                   
                   <div className="space-y-4">
-                    <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight break-words">{viewingUser.name}</h3>
+                    <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight break-words border-l-4 border-bkash pl-3">{viewingUser.name}</h3>
                     <div className="grid grid-cols-1 gap-3 pt-3 border-t border-slate-100">
                       {[
                         { label: 'মোবাইল', value: toBn(viewingUser.mobile) },
+                        { label: 'চুক্তিধারী', value: viewingUser.chukirdharirName },
                         { label: 'ঠিকানা', value: viewingUser.address },
                         { label: 'জমির পরিমাণ', value: toBn(viewingUser.jomirPoriman) + ' শতাংশ' },
                         { label: 'ব্যালেন্স', value: toBn(viewingUser.pwrBalance.toLocaleString()) + ' ৳' },
                         { label: 'মেয়াদ শেষ', value: toBn(formatDate(viewingUser.expireDate)) },
-                      ].map((item, idx) => (
-                        <div key={idx} className="flex border-b border-slate-50 pb-2 overflow-hidden">
-                          <span className="w-28 shrink-0 text-[10px] font-bold text-slate-400 uppercase">{item.label}:</span>
-                          <span className="text-[11px] font-black text-slate-900 flex-1 min-w-0 break-words">{item.value}</span>
+                      ].map((item) => (
+                        <div key={`card-field-${item.label}`} className="flex border-b border-slate-50 pb-2 overflow-hidden items-center group">
+                          <span className="w-24 shrink-0 text-[8px] font-bold text-slate-400 group-hover:text-bkash transition-colors uppercase">{item.label}:</span>
+                          <span className="text-[9px] font-black text-slate-900 flex-1 min-w-0 break-words">{item.value}</span>
                         </div>
                       ))}
                     </div>
                     <div className="flex justify-center pt-4">
-                       <div className={`px-6 py-2 border-2 border-slate-900 text-[10px] font-black uppercase tracking-[0.3em] ${
+                       <div className={`px-6 py-2 border-2 border-slate-900 text-[10px] font-black uppercase tracking-[0.3em] shadow-[4px_4px_0px_rgba(15,23,42,1)] ${
                          getDaysLeft(viewingUser.expireDate) < 0 ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'
                        }`}>
                          {getDaysLeft(viewingUser.expireDate) < 0 ? 'মেয়াদ উত্তীর্ণ' : 'যাচাইকৃত ইউজার'}
@@ -1451,8 +1539,8 @@ export default function App() {
                           { label: 'পিতার নাম / স্বামী', value: viewingUser.chukirdharirName || '---' },
                           { label: 'মোবাইল নম্বর', value: toBn(viewingUser.mobile) },
                           { label: 'ঠিকানা', value: viewingUser.address },
-                        ].map((item, idx) => (
-                          <div key={idx} className="flex border-b border-slate-50 py-1 overflow-hidden">
+                        ].map((item) => (
+                          <div key={`part-field-${item.label}`} className="flex border-b border-slate-50 py-1 overflow-hidden">
                             <span className="w-32 shrink-0 text-[9px] font-bold text-slate-400 uppercase">{item.label}:</span>
                             <span className="text-[10px] font-black text-slate-900 break-words flex-1 min-w-0">{item.value}</span>
                           </div>
@@ -1471,8 +1559,8 @@ export default function App() {
                         {[
                           { label: 'জমির পরিমাণ', value: toBn(viewingUser.jomirPoriman) + ' শতাংশ' },
                           { label: 'সম্পত্তির অবস্থান', value: viewingUser.address },
-                        ].map((item, idx) => (
-                          <div key={idx} className="flex border-b border-slate-50 py-1 overflow-hidden">
+                        ].map((item) => (
+                          <div key={`prop-field-${item.label}`} className="flex border-b border-slate-50 py-1 overflow-hidden">
                             <span className="w-32 shrink-0 text-[9px] font-bold text-slate-400 uppercase">{item.label}:</span>
                             <span className="text-[10px] font-black text-slate-900 break-words flex-1 min-w-0">{item.value}</span>
                           </div>
@@ -1493,8 +1581,8 @@ export default function App() {
                           { label: 'পরিশোধিত টাকা', value: toBn((viewingUser.history || []).reduce((sum, h) => sum + h.amount, 0).toLocaleString()) + ' ৳' },
                           { label: 'পাওয়ার ব্যালেন্স', value: toBn(viewingUser.pwrBalance.toLocaleString()) + ' ৳', highlight: true },
                           { label: 'মেয়াদ শেষ', value: toBn(formatDate(viewingUser.expireDate)) },
-                        ].map((item, idx) => (
-                          <div key={idx} className={`flex border-b border-slate-50 py-1 overflow-hidden ${item.highlight ? 'bg-slate-50 px-1' : ''}`}>
+                        ].map((item) => (
+                          <div key={`fin-field-${item.label}`} className={`flex border-b border-slate-50 py-1 overflow-hidden ${item.highlight ? 'bg-slate-50 px-1' : ''}`}>
                             <span className="w-32 shrink-0 text-[9px] font-bold text-slate-400 uppercase">{item.label}:</span>
                             <span className={`text-[10px] font-black flex-1 min-w-0 ${item.highlight ? 'text-slate-900' : 'text-slate-700'}`}>{item.value}</span>
                           </div>
@@ -1522,7 +1610,7 @@ export default function App() {
                           </thead>
                           <tbody>
                             {(viewingUser.history || []).map((h, i) => (
-                              <tr key={i} className="border-b border-slate-100">
+                              <tr key={`hist-portfolio-${i}-${h.date}`} className="border-b border-slate-100">
                                 <td className="px-2 py-1.5 text-[9px] font-bold text-slate-400 text-center border-r border-slate-50">{toBn(i + 1)}</td>
                                 <td className="px-2 py-1.5 text-[9px] font-bold text-slate-700 border-r border-slate-50">{toBn(formatDate(h.date))}</td>
                                 <td className="px-2 py-1.5 text-[9px] font-black text-slate-900 text-right border-r border-slate-50">{toBn(h.amount.toLocaleString())}</td>
@@ -1551,18 +1639,24 @@ export default function App() {
               )}
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-4 mt-10 no-print">
+            <div className="flex flex-col sm:flex-row gap-3 mt-10 no-print">
               <button 
                 onClick={handlePrint}
                 className="flex-1 py-4.5 bg-bkash text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-bkash/30 flex items-center justify-center gap-2 hover:bg-bkash-dark active:scale-95 transition-all"
               >
-                <Printer className="w-4 h-4" /> {viewMode === 'card' ? 'কার্ড প্রিন্ট করুন' : viewMode === 'portfolio' ? 'পোর্টফোলিও প্রিন্ট করুন' : 'বিস্তারিত প্রিন্ট করুন'}
+                <Printer className="w-4 h-4" /> {viewMode === 'card' ? 'প্রিন্ট' : viewMode === 'portfolio' ? 'প্রিন্ট' : 'প্রিন্ট'}
+              </button>
+              <button 
+                onClick={handleDownloadPDF}
+                className="flex-1 py-4.5 bg-emerald-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-emerald-900/20 flex items-center justify-center gap-2 hover:bg-emerald-700 active:scale-95 transition-all"
+              >
+                <Download className="w-4 h-4" /> পিডিওএফ ডাউনলোড
               </button>
               <button 
                 onClick={() => setShowViewModal(false)} 
                 className="flex-1 py-4.5 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-200 active:scale-95 transition-all"
               >
-                বন্ধ করুন
+                বন্ধ
               </button>
             </div>
           </Modal>
@@ -1731,7 +1825,7 @@ export default function App() {
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: idx * 0.05 }}
-                        key={idx} 
+                        key={`hist-collect-${idx}-${item.date}`} 
                         className="bg-white rounded-2xl p-4 border border-slate-100 hover:border-bkash/20 hover:shadow-lg transition-all group"
                       >
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -1868,10 +1962,10 @@ export default function App() {
                         onClick={async () => {
                           setIsProcessing(true);
                           // Artificial delay for user request
-                          await new Promise(resolve => setTimeout(resolve, 20000));
+                          await new Promise(resolve => setTimeout(resolve, 1000));
                           downloadCSV(reportData, `Report_${reportRange.start}_to_${reportRange.end}.csv`);
                           setIsSuccess(true);
-                          await new Promise(resolve => setTimeout(resolve, 3000));
+                          await new Promise(resolve => setTimeout(resolve, 2000));
                           setIsSuccess(false);
                           setIsProcessing(false);
                           setShowReportsModal(false);
