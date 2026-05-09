@@ -40,7 +40,15 @@ import {
   FileBarChart,
   CalendarDays,
   FileDown,
-  FileText
+  FileText,
+  Hash,
+  ShieldCheck,
+  Shield,
+  Info,
+  User as UserIcon,
+  Gavel,
+  ScrollText,
+  UserCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, StatusFilter, INITIAL_USERS, SortConfig } from './types';
@@ -107,34 +115,42 @@ const Countdown = ({ dateStr }: { dateStr: string }) => {
   
   if (total < 0) {
     return (
-      <div className="flex items-center gap-1.5 text-rose-500">
+      <div className="flex items-center gap-1.5 px-3 py-1 bg-rose-50 text-rose-600 rounded-xl border border-rose-100 shadow-sm">
         <Clock className="w-3 h-3" />
-        <span className="font-black text-[8px] uppercase">মেয়াদ শেষ</span>
+        <span className="font-black text-[9px] uppercase tracking-widest">Expired</span>
       </div>
     );
   }
 
+  const units = [
+    { label: 'দিন', value: days, active: true },
+    { label: 'ঘন্টা', value: hours, active: days === 0 },
+    { label: 'মিনিট', value: minutes, active: days === 0 && hours === 0 },
+    { label: 'সেকেন্ড', value: seconds, active: false },
+  ];
+
   return (
-    <div className="flex items-center gap-2">
-      <div className="flex -space-x-1">
-        {[
-          { label: 'দিন', val: days },
-          { label: 'ঘন্টা', val: hours },
-          { label: 'মিনিট', val: minutes },
-          { label: 'সেকেন্ড', val: seconds },
-        ].map((item, i) => (
-          <motion.div 
-            key={i} 
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: i * 0.05 }}
-            className="flex flex-col items-center min-w-[24px]"
-          >
-            <span className="text-[10px] font-black leading-none text-slate-800">{toBn(String(item.val).padStart(2, '0'))}</span>
-            <span className="text-[8px] font-bold text-slate-400 mt-0.5">{item.label}</span>
-          </motion.div>
-        ))}
-      </div>
+    <div className="flex items-center gap-1.5 md:gap-2">
+      {units.map((u, i) => (
+        <div key={i} className="flex flex-col items-center">
+          <div className={`w-9 h-9 md:w-11 md:h-11 rounded-full border-2 flex flex-col items-center justify-center transition-all ${
+            u.label === 'দিন' 
+              ? 'border-bkash bg-bkash/5' 
+              : u.active ? 'border-slate-800' : 'border-slate-200'
+          }`}>
+            <span className={`text-[11px] md:text-[13px] font-black tabular-nums leading-none ${
+              u.label === 'দিন' ? 'text-bkash' : u.active ? 'text-slate-800' : 'text-slate-400'
+            }`}>
+              {toBn(String(u.value).padStart(2, '0'))}
+            </span>
+            <span className={`text-[5px] md:text-[6px] font-black uppercase tracking-tighter mt-0.5 ${
+              u.label === 'দিন' ? 'text-bkash/70' : 'text-slate-400'
+            }`}>
+              {u.label}
+            </span>
+          </div>
+        </div>
+      ))}
     </div>
   );
 };
@@ -600,22 +616,22 @@ export default function App() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 lg:ml-72 p-6 lg:p-10 pb-32 md:pb-10">
+      <main className="flex-1 lg:ml-72 p-4 sm:p-6 lg:p-10 pb-32 md:pb-10 max-w-full overflow-x-hidden">
         <div className="max-w-7xl mx-auto">
           {/* Top Bar */}
-          <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-4 md:mb-10 p-3 md:p-0 bg-white md:bg-transparent rounded-2xl md:rounded-0 shadow-sm md:shadow-none border border-slate-100 md:border-0 overflow-hidden">
+          <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-6 md:mb-10 p-4 md:p-0 bg-white md:bg-transparent rounded-3xl md:rounded-0 shadow-sm md:shadow-none border border-slate-100 md:border-0 overflow-hidden w-full">
             <div className="flex items-center justify-between w-full md:w-auto">
-              <div>
-                <h1 className="text-lg md:text-2xl font-black text-bkash leading-tight tracking-tight">ড্যাশবোর্ড</h1>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <p className="text-slate-400 text-[9px] font-bold uppercase tracking-wider hidden sm:block">চুক্তি ও পাওয়ার ব্যালেন্স ট্র্যাকিং</p>
+              <div className="min-w-0">
+                <h1 className="text-xl md:text-3xl font-black text-slate-800 leading-none tracking-tighter">ড্যাশবোর্ড</h1>
+                <div className="flex items-center gap-2 mt-1.5 overflow-hidden">
+                  <p className="text-slate-400 text-[8px] font-bold uppercase tracking-widest truncate hidden sm:block">চুক্তি ও পাওয়ার ব্যালেন্স ট্র্যাকিং</p>
                   <span className="w-1 h-1 bg-slate-200 rounded-full hidden sm:block"></span>
-                  <p className="text-bkash text-[9px] font-black uppercase tracking-widest flex items-center gap-1">
+                  <p className="text-bkash text-[8px] font-black uppercase tracking-widest flex items-center gap-1 shrink-0">
                     <Clock className="w-3 h-3" /> {liveTime.toLocaleTimeString('bn-BD')}
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-3 md:hidden">
+              <div className="flex items-center gap-2 md:hidden">
                 <button 
                   onClick={handleLogout}
                   aria-label="লগআউট করুন"
@@ -674,28 +690,28 @@ export default function App() {
           </section>
 
           {/* Dashboard Controls */}
-          <div className="bg-white rounded-[2rem] p-4 mb-8 shadow-xl shadow-slate-100 border border-slate-100 flex flex-col xl:flex-row gap-6 items-center">
-            <div className="flex-1 relative group w-full">
+          <div className="bg-white rounded-[2rem] p-3 md:p-5 mb-8 shadow-xl shadow-slate-100 border border-slate-100 flex flex-col xl:flex-row gap-4 md:gap-6 items-center w-full max-w-full overflow-hidden">
+            <div className="flex-1 relative group w-full min-w-0">
               <div className="absolute inset-0 bg-bkash/5 rounded-2xl blur-xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-500" />
               <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5 z-10 transition-colors group-focus-within:text-bkash" aria-hidden="true" />
               <input 
                 type="text" 
                 placeholder="নাম, মোবাইল বা ঠিকানা দিয়ে খুঁজুন..." 
                 aria-label="রেকর্ড খুঁজুন"
-                className="relative w-full pl-14 pr-5 py-4 bg-slate-50/50 border border-slate-100 rounded-[1.25rem] focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/5 transition-all outline-none text-xs font-bold shadow-sm placeholder:text-slate-300"
+                className="relative w-full pl-14 pr-5 py-4 bg-slate-50/50 border border-slate-100 rounded-[1.25rem] focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/5 transition-all outline-none text-xs font-bold shadow-sm placeholder:text-slate-300 truncate"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
             
-            <div className="flex flex-col md:flex-row gap-4 w-full xl:w-auto shrink-0">
-              <div className="flex bg-slate-50 p-1.5 rounded-[1.25rem] border border-slate-100/50 flex-1 md:flex-initial overflow-x-auto no-scrollbar">
+            <div className="flex flex-col md:flex-row gap-3 w-full xl:w-auto shrink-0 overflow-hidden">
+              <div className="flex bg-slate-50 p-1.5 rounded-[1.25rem] border border-slate-100/50 flex-1 md:flex-initial overflow-x-auto no-scrollbar scroll-smooth">
                 {(['all', 'active', 'expired', 'warning'] as StatusFilter[]).map((s) => (
                   <button
                     key={s}
                     onClick={() => setFilter(s)}
                     aria-pressed={filter === s}
-                    className={`whitespace-nowrap px-6 py-3 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all duration-300 ${
+                    className={`whitespace-nowrap px-5 py-2.5 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all duration-300 flex-1 md:flex-none ${
                       filter === s ? 'bg-white shadow-md text-bkash' : 'text-slate-400 hover:text-slate-600 hover:bg-white/50'
                     }`}
                   >
@@ -704,34 +720,36 @@ export default function App() {
                 ))}
               </div>
 
-              <div className="flex items-center gap-2 bg-slate-800 p-1.5 rounded-[1.25rem] shadow-lg shadow-slate-900/10">
-                <div className="px-4 py-2 flex items-center gap-2 text-slate-400 border-r border-slate-700/50">
+              <div className="flex items-center gap-2 bg-slate-800 p-1.5 rounded-[1.25rem] shadow-lg shadow-slate-900/10 overflow-x-auto no-scrollbar scroll-smooth">
+                <div className="px-3 py-2 flex items-center gap-2 text-slate-400 border-r border-slate-700/50 shrink-0">
                   <ArrowUpDown className="w-3 h-3" />
-                  <span className="text-[7px] font-black uppercase tracking-widest">Sort By</span>
+                  <span className="text-[7px] font-black uppercase tracking-widest hidden sm:inline">Sort By</span>
                 </div>
-                {[
-                  { key: 'name', label: 'Name' },
-                  { key: 'amount', label: 'Ledger' },
-                  { key: 'expireDate', label: 'Timeline' },
-                ].map((item) => {
-                  const isActive = sortConfig.find(sc => sc.key === item.key);
-                  return (
-                    <button
-                      key={item.key}
-                      onClick={(e) => toggleSort(item.key as keyof User, e.shiftKey)}
-                      aria-label={`Sort by ${item.label}`}
-                      aria-pressed={!!isActive}
-                      className={`px-5 py-2.5 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all ${
-                        isActive ? 'bg-bkash text-white shadow-lg shadow-bkash/20' : 'text-slate-400 hover:text-slate-100 hover:bg-slate-700'
-                      } flex items-center gap-2`}
-                    >
-                      {item.label}
-                      {isActive && (
-                         isActive.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
-                      )}
-                    </button>
-                  );
-                })}
+                <div className="flex items-center gap-2 w-full">
+                  {[
+                    { key: 'name', label: 'Name' },
+                    { key: 'amount', label: 'Ledger' },
+                    { key: 'expireDate', label: 'Timeline' },
+                  ].map((item) => {
+                    const isActive = sortConfig.find(sc => sc.key === item.key);
+                    return (
+                      <button
+                        key={item.key}
+                        onClick={(e) => toggleSort(item.key as keyof User, e.shiftKey)}
+                        aria-label={`Sort by ${item.label}`}
+                        aria-pressed={!!isActive}
+                        className={`whitespace-nowrap px-4 py-2.5 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all flex-1 md:flex-none ${
+                          isActive ? 'bg-bkash text-white shadow-lg shadow-bkash/20' : 'text-slate-400 hover:text-slate-100 hover:bg-slate-700'
+                        } flex items-center justify-center gap-2`}
+                      >
+                        {item.label}
+                        {isActive && (
+                          isActive.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
@@ -778,11 +796,16 @@ export default function App() {
                             </p>
                             <p className="text-[9px] font-bold text-slate-600 truncate">{user.address}</p>
                           </div>
-                          <div>
+                          <div className="flex flex-col gap-1">
                             <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-0.5 flex items-center gap-1">
                               <Calendar className="w-2.5 h-2.5 text-bkash" /> মেয়াদ শেষ
                             </p>
-                            <p className="text-[9px] font-bold text-slate-600">{formatDate(user.expireDate)}</p>
+                            <div className="flex items-center gap-3">
+                              <p className="text-[10px] font-black text-slate-800 leading-none">{formatDate(user.expireDate)}</p>
+                              <div className="scale-[0.85] origin-left border-l border-slate-200 pl-3">
+                                <Countdown dateStr={user.expireDate} />
+                              </div>
+                            </div>
                           </div>
                         </div>
 
@@ -940,7 +963,7 @@ export default function App() {
                                     <div className="flex items-center gap-2 text-[10px] font-black text-slate-600 tracking-tight tabular-nums">
                                       <Calendar className="w-3 h-3 text-slate-300" /> {formatDate(user.expireDate)}
                                     </div>
-                                    <div className="scale-75 origin-top transition-transform group-hover:scale-90">
+                                    <div className="scale-90 origin-top transition-transform group-hover:scale-100">
                                       <Countdown dateStr={user.expireDate} />
                                     </div>
                                   </div>
@@ -1145,7 +1168,7 @@ export default function App() {
               </button>
             </div>
 
-            <div id="print-area" className="w-full">
+            <div id="print-area" className="w-full max-w-full overflow-x-hidden p-1">
               {viewMode === 'details' ? (
                 <div id="print-details" className="space-y-6">
                   <div className="bg-slate-50 rounded-3xl p-6 border border-slate-100">
@@ -1239,231 +1262,159 @@ export default function App() {
                   )}
                 </div>
               ) : viewMode === 'card' ? (
-                <div id="print-card" className="relative group perspective-1000 w-full max-w-sm mx-auto">
-                  <div className="bg-gradient-to-br from-bkash via-bkash-dark to-slate-900 rounded-[2.5rem] overflow-hidden shadow-2xl relative border border-white/10 ring-1 ring-white/5">
-                    {/* Background Accents */}
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-                    <div className="absolute bottom-0 left-0 w-64 h-64 bg-white/5 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2"></div>
-                    
-                    {/* Header */}
-                    <div className="p-8 pb-4 relative flex justify-between items-start">
-                      <div>
-                        <div className="flex items-center gap-2 mb-4">
-                          <div className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center">
-                            <Landmark className="w-5 h-5 text-white" />
-                          </div>
-                          <span className="text-[10px] font-black text-white/60 uppercase tracking-[0.3em]">bKash Pro Card</span>
-                        </div>
-                        <h3 className="text-2xl font-black text-white tracking-tight uppercase leading-none">{viewingUser.name}</h3>
-                        <p className="text-white/40 text-[9px] font-bold mt-2 uppercase tracking-[0.2em] flex items-center gap-2">
-                          <MapPin className="w-3.5 h-3.5 text-white/60" /> {viewingUser.address}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <div className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10">
-                          <p className="text-[8px] font-black text-white/60 uppercase tracking-widest mb-0.5">পাওয়ার ব্যালেন্স</p>
-                          <p className="text-xl font-black text-white">{toBn(viewingUser.pwrBalance.toLocaleString())} ৳</p>
-                        </div>
-                      </div>
+                <div id="print-card" className="w-full max-w-sm mx-auto bg-white border-2 border-slate-900 rounded-sm p-4 md:p-6 overflow-hidden">
+                  <div className="flex border-b border-slate-900 pb-3 mb-4 justify-between items-center text-slate-800">
+                    <div className="flex items-center gap-1.5">
+                      <Landmark className="w-4 h-4" />
+                      <span className="text-[8px] font-black uppercase tracking-[0.2em]">অফিসিয়াল কার্ড</span>
                     </div>
-
-                    {/* Divider */}
-                    <div className="mx-8 h-px bg-white/5 my-4"></div>
-
-                    {/* Identity Grid */}
-                    <div className="px-8 grid grid-cols-2 gap-8 pb-8">
-                      <div>
-                        <div className="text-[8px] font-black text-white/30 uppercase tracking-[0.3em] mb-2">ইউজার মোবাইল</div>
-                        <div className="text-[11px] font-black text-white px-2">
-                          {toBn(viewingUser.mobile)}
+                    <span className="text-[8px] font-black uppercase">আইডি: {toBn(viewingUser.id.slice(-6).toUpperCase())}</span>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight break-words">{viewingUser.name}</h3>
+                    <div className="grid grid-cols-1 gap-2.5 pt-2 border-t border-slate-100">
+                      {[
+                        { label: 'মোবাইল', value: toBn(viewingUser.mobile) },
+                        { label: 'ঠিকানা', value: viewingUser.address },
+                        { label: 'জমির পরিমাণ', value: toBn(viewingUser.jomirPoriman) + ' শতাংশ' },
+                        { label: 'ব্যালেন্স', value: toBn(viewingUser.pwrBalance.toLocaleString()) + ' ৳' },
+                        { label: 'মেয়াদ শেষ', value: toBn(formatDate(viewingUser.expireDate)) },
+                      ].map((item, idx) => (
+                        <div key={idx} className="flex border-b border-slate-50 pb-1.5 overflow-hidden">
+                          <span className="w-24 shrink-0 text-[8px] font-bold text-slate-400 uppercase">{item.label}:</span>
+                          <span className="text-[9px] font-black text-slate-900 flex-1 min-w-0 break-words">{item.value}</span>
                         </div>
-                      </div>
-                      <div>
-                        <div className="text-[8px] font-black text-white/30 uppercase tracking-[0.3em] mb-2">জমির পরিমাণ</div>
-                        <div className="text-[11px] font-black text-white px-2">
-                          {toBn(viewingUser.jomirPoriman)}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-[8px] font-black text-white/30 uppercase tracking-[0.3em] mb-2">মেয়াদ শেষ হওয়ার তারিখ</div>
-                        <div className="text-[11px] font-black text-white px-2">
-                          {toBn(formatDate(viewingUser.expireDate))}
-                        </div>
-                      </div>
-                      <div className="relative">
-                        <div className="text-[8px] font-black text-white/30 uppercase tracking-[0.3em] mb-2">স্ট্যাটাস</div>
-                        <div className={`text-[9px] font-black uppercase tracking-widest inline-flex items-center px-4 py-1.5 rounded-xl shadow-lg ${
-                          getDaysLeft(viewingUser.expireDate) < 0 ? 'bg-rose-500 text-white' : 'bg-emerald-500 text-white'
-                        }`}>
-                           {getDaysLeft(viewingUser.expireDate) < 0 ? 'Expired' : 'Verified'}
-                        </div>
-                      </div>
+                      ))}
+                    </div>
+                    <div className="flex justify-center pt-2">
+                       <div className={`px-4 py-1 border border-slate-900 text-[7px] font-black uppercase tracking-[0.2em] ${
+                         getDaysLeft(viewingUser.expireDate) < 0 ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'
+                       }`}>
+                         {getDaysLeft(viewingUser.expireDate) < 0 ? 'মেয়াদ উত্তীর্ণ' : 'যাচাইকৃত ইউজার'}
+                       </div>
                     </div>
                   </div>
                 </div>
               ) : (
-                <div id="print-portfolio" className="bg-white p-10 rounded-[2rem] border-2 border-slate-100 shadow-sm relative overflow-hidden">
-                  {/* Decorative Watermark */}
-                  <div className="absolute top-0 right-0 p-8 opacity-[0.03] pointer-events-none">
-                    <FileText className="w-64 h-64 rotate-12" />
+                <div id="print-portfolio" className="bg-white min-h-[1100px] p-6 md:p-10 shadow-sm border border-slate-200 rounded-sm">
+                  {/* Clean Formal Header */}
+                  <div className="text-center mb-8 border-b-2 border-slate-900 pb-6">
+                    <h1 className="text-xl font-black text-slate-900 mb-1 uppercase">জমি বন্ধক ও অঙ্গীকারনামা</h1>
+                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">অফিসিয়াল পোর্টফোলিও রিপোর্ট</p>
+                    <div className="flex justify-between items-center mt-6 text-[8px] font-black text-slate-400">
+                      <span>দলিল নং: {toBn(viewingUser.id.slice(-8).toUpperCase())}</span>
+                      <span>তারিখ: {toBn(new Date().toLocaleDateString('bn-BD'))}</span>
+                    </div>
                   </div>
 
-                  <div className="relative">
-                    <div className="flex justify-between items-center mb-10 pb-8 border-b-2 border-bkash/20">
-                      <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 bg-bkash rounded-2xl flex items-center justify-center text-white shadow-xl shadow-bkash/20">
-                          <FileText className="w-8 h-8" />
-                        </div>
-                        <div>
-                          <h2 className="text-2xl font-black text-slate-800 tracking-tight uppercase">ইউজার পোর্টফোলিও</h2>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="px-2 py-0.5 bg-slate-100 rounded text-[7px] font-black text-slate-500 uppercase tracking-widest leading-none">
-                              ID: {viewingUser.id}
-                            </span>
-                            <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
-                            <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest leading-none">
-                              অফিসিয়াল কপি
-                            </span>
+                  <div className="space-y-8">
+                    {/* Section 1: Parties */}
+                    <section>
+                      <div className="flex items-center gap-2 mb-3 pb-1 border-b border-slate-900">
+                        <span className="text-[9px] font-black">০১.</span>
+                        <h3 className="text-[10px] font-black uppercase tracking-widest">প্রাথমিক তথ্য</h3>
+                      </div>
+                      
+                      <div className="space-y-1 px-4">
+                        {[
+                          { label: 'প্রথম পক্ষ (ইউজার)', value: viewingUser.name },
+                          { label: 'পিতার নাম / স্বামী', value: viewingUser.chukirdharirName || '---' },
+                          { label: 'মোবাইল নম্বর', value: toBn(viewingUser.mobile) },
+                          { label: 'ঠিকানা', value: viewingUser.address },
+                        ].map((item, idx) => (
+                          <div key={idx} className="flex border-b border-slate-50 py-1 overflow-hidden">
+                            <span className="w-32 shrink-0 text-[9px] font-bold text-slate-400 uppercase">{item.label}:</span>
+                            <span className="text-[10px] font-black text-slate-900 break-words flex-1 min-w-0">{item.value}</span>
                           </div>
-                        </div>
+                        ))}
                       </div>
-                      <div className="text-right">
-                        <h3 className="text-xl font-black text-bkash leading-none mb-2">bKash Tracking</h3>
-                        <p className="text-[10px] font-bold text-slate-400 flex items-center justify-end gap-2">
-                          <Calendar className="w-3 h-3" /> ইস্যু তারিখ: {toBn(new Date().toLocaleDateString('bn-BD'))}
-                        </p>
-                      </div>
-                    </div>
+                    </section>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-10 mb-10">
-                      <div className="space-y-6">
-                        <div className="flex items-center gap-2 mb-2">
-                          <div className="w-6 h-1 bg-bkash rounded-full"></div>
-                          <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-[0.2em]">ইউজার প্রোফাইল</h4>
-                        </div>
-                        <div className="space-y-4">
-                          {[
-                            { label: 'পূর্ণ নাম', value: viewingUser.name },
-                            { label: 'মোবাইল নম্বর', value: toBn(viewingUser.mobile) },
-                            { label: 'বর্তমান ঠিকানা', value: viewingUser.address },
-                            { label: 'জমির পরিমাণ', value: toBn(viewingUser.jomirPoriman) + ' শতাংশ' },
-                            { label: 'চুক্তিধারী', value: viewingUser.chukirdharirName },
-                          ].map((item, idx) => (
-                            <div key={idx} className="flex flex-col gap-1 border-b border-dashed border-slate-100 pb-2">
-                              <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{item.label}</span>
-                              <span className="text-[11px] font-black text-slate-700">{item.value}</span>
-                            </div>
-                          ))}
-                        </div>
+                    {/* Section 2: Property */}
+                    <section>
+                      <div className="flex items-center gap-2 mb-3 pb-1 border-b border-slate-900">
+                        <span className="text-[9px] font-black">০২.</span>
+                        <h3 className="text-[10px] font-black uppercase tracking-widest">সম্পত্তির বিবরণ</h3>
                       </div>
-
-                      <div className="space-y-6">
-                        <div className="flex items-center gap-2 mb-2">
-                          <div className="w-6 h-1 bg-bkash rounded-full"></div>
-                          <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-[0.2em]">আর্থিক বিবরণী</h4>
-                        </div>
-                        <div className="bg-slate-50/50 p-6 rounded-3xl border border-slate-100 relative overflow-hidden">
-                          <div className="absolute top-0 right-0 w-24 h-24 bg-bkash/5 rounded-full -translate-y-1/2 translate-x-1/2"></div>
-                          <div className="space-y-4 relative">
-                            <div className="flex justify-between items-end">
-                              <div>
-                                <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-1">মোট চুক্তির পরিমাণ</p>
-                                <p className="text-lg font-black text-slate-800 leading-none">{toBn(viewingUser.amount.toLocaleString())} <span className="text-xs">৳</span></p>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-1">সংগৃহীত</p>
-                                <p className="text-md font-black text-emerald-600 leading-none">{toBn((viewingUser.history || []).reduce((sum, h) => sum + h.amount, 0).toLocaleString())} <span className="text-[10px]">৳</span></p>
-                              </div>
-                            </div>
-                            <div className="h-px bg-slate-200/50"></div>
-                            <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-xl bg-bkash/10 flex items-center justify-center">
-                                  <Wallet className="w-4 h-4 text-bkash" />
-                                </div>
-                                <span className="text-[10px] font-black text-slate-700 uppercase tracking-widest">পাওয়ার ব্যালেন্স</span>
-                              </div>
-                              <span className="text-xl font-black text-bkash">{toBn(viewingUser.pwrBalance.toLocaleString())} ৳</span>
-                            </div>
-                            <div className="pt-2">
-                              <div className="flex justify-between text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-2">
-                                <span>মেয়াদ শেষের তারিখ</span>
-                                <span>অবশিষ্ট সময়</span>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <span className="text-[10px] font-black text-slate-700">{toBn(formatDate(viewingUser.expireDate))}</span>
-                                <Countdown dateStr={viewingUser.expireDate} />
-                              </div>
-                            </div>
+                      
+                      <div className="space-y-1 px-4">
+                        {[
+                          { label: 'জমির পরিমাণ', value: toBn(viewingUser.jomirPoriman) + ' শতাংশ' },
+                          { label: 'সম্পত্তির অবস্থান', value: viewingUser.address },
+                        ].map((item, idx) => (
+                          <div key={idx} className="flex border-b border-slate-50 py-1 overflow-hidden">
+                            <span className="w-32 shrink-0 text-[9px] font-bold text-slate-400 uppercase">{item.label}:</span>
+                            <span className="text-[10px] font-black text-slate-900 break-words flex-1 min-w-0">{item.value}</span>
                           </div>
-                        </div>
+                        ))}
                       </div>
-                    </div>
+                    </section>
 
-                    <div className="mb-12">
-                      <div className="flex items-center gap-2 mb-6">
-                        <div className="w-6 h-1 bg-bkash rounded-full"></div>
-                        <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-[0.2em]">লেনদেনের সারসংক্ষেপ</h4>
+                    {/* Section 3: Financials */}
+                    <section>
+                      <div className="flex items-center gap-2 mb-3 pb-1 border-b border-slate-900">
+                        <span className="text-[9px] font-black">০৩.</span>
+                        <h3 className="text-[10px] font-black uppercase tracking-widest">আর্থিক স্থিতি</h3>
                       </div>
-                      <div className="overflow-hidden rounded-2xl border border-slate-100">
-                        <table className="w-full text-left">
+                      
+                      <div className="space-y-1 px-4">
+                        {[
+                          { label: 'মোট চুক্তির মূল্য', value: toBn(viewingUser.amount.toLocaleString()) + ' ৳' },
+                          { label: 'পরিশোধিত টাকা', value: toBn((viewingUser.history || []).reduce((sum, h) => sum + h.amount, 0).toLocaleString()) + ' ৳' },
+                          { label: 'পাওয়ার ব্যালেন্স', value: toBn(viewingUser.pwrBalance.toLocaleString()) + ' ৳', highlight: true },
+                          { label: 'মেয়াদ শেষ', value: toBn(formatDate(viewingUser.expireDate)) },
+                        ].map((item, idx) => (
+                          <div key={idx} className={`flex border-b border-slate-50 py-1 overflow-hidden ${item.highlight ? 'bg-slate-50 px-1' : ''}`}>
+                            <span className="w-32 shrink-0 text-[9px] font-bold text-slate-400 uppercase">{item.label}:</span>
+                            <span className={`text-[10px] font-black flex-1 min-w-0 ${item.highlight ? 'text-slate-900' : 'text-slate-700'}`}>{item.value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+
+                    {/* Section 4: History Table */}
+                    <section>
+                      <div className="flex items-center gap-2 mb-3 pb-1 border-b border-slate-900">
+                        <span className="text-[9px] font-black">০৪.</span>
+                        <h3 className="text-[10px] font-black uppercase tracking-widest">লেনদেনের কিস্তি তালিকা</h3>
+                      </div>
+                      
+                      <div className="px-1 overflow-x-auto">
+                        <table className="w-full text-left border border-slate-200 table-fixed">
                           <thead>
-                            <tr className="bg-slate-50 border-b border-slate-100">
-                              <th className="px-6 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">তারিখ</th>
-                              <th className="px-6 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">পরিমাণ (৳)</th>
-                              <th className="px-6 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">বর্ধিত সময়</th>
-                              <th className="px-6 py-4 text-[9px] font-black text-slate-400 uppercase tracking-widest text-right">নতুন মেয়াদ</th>
+                            <tr className="bg-slate-900 text-white">
+                              <th className="w-10 px-2 py-1.5 text-[8px] font-black uppercase border-r border-slate-700 text-center">নং</th>
+                              <th className="px-2 py-1.5 text-[8px] font-black uppercase border-r border-slate-700">তারিখ</th>
+                              <th className="px-2 py-1.5 text-[8px] font-black uppercase border-r border-slate-700 text-right">আদায়</th>
+                              <th className="w-12 px-2 py-1.5 text-[8px] font-black uppercase border-r border-slate-700 text-center">মাস</th>
+                              <th className="px-2 py-1.5 text-[8px] font-black uppercase text-right">নতুন মেয়াদ</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-slate-50">
-                            {(viewingUser.history || []).length > 0 ? (
-                              (viewingUser.history || []).map((h, i) => (
-                                <tr key={i} className="hover:bg-slate-50/50 transition-colors">
-                                  <td className="px-6 py-4 text-[10px] font-bold text-slate-600">{toBn(formatDate(h.date))}</td>
-                                  <td className="px-6 py-4 text-[10px] font-black text-emerald-600 text-right">{toBn(h.amount.toLocaleString())} ৳</td>
-                                  <td className="px-6 py-4 text-[10px] font-black text-slate-800 text-center">{toBn(h.monthsExtended)} মাস</td>
-                                  <td className="px-6 py-4 text-[10px] font-black text-bkash text-right">{toBn(formatDate(h.newExpiryDate))}</td>
-                                </tr>
-                              ))
-                            ) : (
-                              <tr>
-                                <td colSpan={4} className="px-6 py-10 text-center text-[10px] font-bold text-slate-400 uppercase italic">কোন লেনদেনের তথ্য পাওয়া যায়নি</td>
+                          <tbody>
+                            {(viewingUser.history || []).map((h, i) => (
+                              <tr key={i} className="border-b border-slate-100">
+                                <td className="px-2 py-1.5 text-[9px] font-bold text-slate-400 text-center border-r border-slate-50">{toBn(i + 1)}</td>
+                                <td className="px-2 py-1.5 text-[9px] font-bold text-slate-700 border-r border-slate-50">{toBn(formatDate(h.date))}</td>
+                                <td className="px-2 py-1.5 text-[9px] font-black text-slate-900 text-right border-r border-slate-50">{toBn(h.amount.toLocaleString())}</td>
+                                <td className="px-2 py-1.5 text-[9px] font-bold text-slate-600 text-center border-r border-slate-50">{toBn(h.monthsExtended)}</td>
+                                <td className="px-2 py-1.5 text-[9px] font-black text-slate-900 text-right">{toBn(formatDate(h.newExpiryDate))}</td>
                               </tr>
-                            )}
+                            ))}
                           </tbody>
                         </table>
                       </div>
-                    </div>
+                    </section>
 
-                    <div className="mt-12 pt-8 border-t-2 border-slate-50">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-                        <div className="space-y-4">
-                          <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest italic">বিশেষ শর্তাবলি ও ঘোষণা:</h4>
-                          <ul className="text-[9px] text-slate-500 space-y-2 list-none italic leading-relaxed">
-                            <li className="flex gap-2">
-                              <span className="text-bkash">●</span>
-                              <span>এই পোর্টফোলিওটি সিস্টেমে সংরক্ষিত ডাটার উপর ভিত্তি করে স্বয়ংক্রিয়ভাবে জেনারেট হয়েছে।</span>
-                            </li>
-                            <li className="flex gap-2">
-                              <span className="text-bkash">●</span>
-                              <span>পাওয়ার ব্যালেন্সের তথ্য কোনো আর্থিক লেনদেনের চূড়ান্ত প্রমান হিসেবে গণ্য হবে না।</span>
-                            </li>
-                            <li className="flex gap-2">
-                              <span className="text-bkash">●</span>
-                              <span>যেকোনো ধরনের অসংগতি পাওয়া গেলে কালক্ষেপণ না করে দ্রুত অ্যাডমিন প্যানেলে যোগাযোগ করুন।</span>
-                            </li>
-                          </ul>
-                        </div>
-                        <div className="flex justify-between items-end py-4">
-                          <div className="text-center group">
-                            <div className="w-32 border-b-2 border-slate-200 mb-2 mx-auto transition-colors group-hover:border-bkash"></div>
-                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">কর্তৃপক্ষের স্বাক্ষর</p>
-                          </div>
-                          <div className="text-center group">
-                            <div className="w-32 border-b-2 border-slate-200 mb-2 mx-auto transition-colors group-hover:border-bkash"></div>
-                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">ব্যবহারকারীর স্বাক্ষর</p>
-                          </div>
-                        </div>
+                    {/* Section 5: Signatures */}
+                    <div className="mt-16 flex justify-between px-6">
+                      <div className="text-center w-32">
+                        <div className="border-b border-slate-300 mb-1"></div>
+                        <p className="text-[8px] font-black text-slate-400 uppercase">ইউজার স্বাক্ষর</p>
+                      </div>
+                      <div className="text-center w-32">
+                        <div className="border-b border-slate-300 mb-1"></div>
+                        <p className="text-[8px] font-black text-slate-400 uppercase">কর্তৃপক্ষ স্বাক্ষর</p>
                       </div>
                     </div>
                   </div>
