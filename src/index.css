@@ -31,65 +31,90 @@
 .status-warning { @apply bg-[#fff3e0] text-[#ff9800]; }
 .status-expired { @apply bg-[#ffebee] text-[#f44336]; }
 
+/* Success Checkmark Animation */
+.checkmark-circle {
+  stroke-dasharray: 166;
+  stroke-dashoffset: 166;
+  stroke-width: 2;
+  stroke-miterlimit: 10;
+  stroke: #ffffff;
+  fill: none;
+  animation: stroke 0.6s cubic-bezier(0.65, 0, 0.45, 1) forwards;
+}
+
+.checkmark {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: block;
+  stroke-width: 2;
+  stroke: #fff;
+  stroke-miterlimit: 10;
+  box-shadow: inset 0px 0px 0px #e2136e;
+  animation: fill .4s ease-in-out .4s forwards, scale .3s ease-in-out .9s both;
+}
+
+.checkmark-check {
+  transform-origin: 50% 50%;
+  stroke-dasharray: 48;
+  stroke-dashoffset: 48;
+  animation: stroke 0.3s cubic-bezier(0.65, 0, 0.45, 1) 0.8s forwards;
+}
+
+@keyframes stroke {
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes scale {
+  0%, 100% {
+    transform: none;
+  }
+  50% {
+    transform: scale3d(1.1, 1.1, 1);
+  }
+}
+@keyframes fill {
+  100% {
+    box-shadow: inset 0px 0px 0px 30px #e2136e;
+  }
+}
+
 @media print {
   @page {
     margin: 1cm;
-    size: auto;
+    size: A4;
   }
   
   html, body {
     height: auto !important;
     overflow: visible !important;
     background: white !important;
+    font-size: 10pt !important;
   }
 
   body * {
     visibility: hidden !important;
   }
 
-  #print-card, #print-card * {
+  #print-area, #print-area * {
     visibility: visible !important;
   }
 
-  #print-card {
+  #print-area {
     position: absolute !important;
     left: 0 !important;
     top: 0 !important;
     width: 100% !important;
     margin: 0 !important;
-    padding: 0 !important;
+    padding: 20px !important;
     border: none !important;
     box-shadow: none !important;
-    background: transparent !important;
-    display: block !important;
-  }
-
-  /* Ensure modal and containers allow printing */
-  .fixed, .absolute {
-    /* We need to be careful not to break #print-card absolute positioning */
-  }
-  
-  /* Reset modal for print */
-  div[class*="bg-slate-900/60"] {
-    background: transparent !important;
-    position: static !important;
-    display: block !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    overflow: visible !important;
-  }
-
-  div[class*="bg-white rounded-t-"] {
     background: white !important;
-    position: static !important;
-    width: 100% !important;
-    max-width: none !important;
-    max-height: none !important;
-    overflow: visible !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    box-shadow: none !important;
-    border: none !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
   }
 
   .no-print {
