@@ -460,8 +460,9 @@ export default function App() {
               setIsProcessing(true);
               try {
                 await signInWithGoogle();
-              } catch (error) {
+              } catch (error: any) {
                 console.error("Login failed:", error);
+                alert(`Login failed: ${error.message || 'Unknown error'}. Please ensure this domain is added to Firebase Authorized Domains.`);
               } finally {
                 setIsProcessing(false);
               }
