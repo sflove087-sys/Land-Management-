@@ -68,56 +68,143 @@ import {
 } from 'firebase/firestore';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 
-const ActionSpinner = ({ isSuccess = false }: { isSuccess?: boolean }) => (
+const ActionSpinner = ({ isSuccess = false, isError = false }: { isSuccess?: boolean, isError?: boolean }) => (
   <motion.div 
     initial={{ opacity: 0 }}
     animate={{ opacity: 1 }}
-    className="absolute inset-0 z-[100] bg-white/95 backdrop-blur-md flex flex-col items-center justify-center rounded-[inherit]"
+    className="absolute inset-0 z-[100] bg-white/95 backdrop-blur-xl flex flex-col items-center justify-center rounded-[inherit]"
     role="status"
     aria-live="polite"
   >
-    <div className="relative w-16 h-16 flex items-center justify-center">
-      {isSuccess ? (
-        <svg className="checkmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
-          <circle className="checkmark-circle" cx="26" cy="26" r="25" fill="none" stroke="#e2136e" />
-          <path className="checkmark-check" fill="none" stroke="#e2136e" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
-        </svg>
-      ) : (
-        <>
-          <div className="absolute inset-0 border-4 border-bkash/10 rounded-full"></div>
-          <div className="absolute inset-0 border-4 border-bkash rounded-full border-t-transparent animate-spin"></div>
-          <div className="w-2.5 h-2.5 bg-bkash rounded-full animate-pulse"></div>
-        </>
+    <div className="relative w-32 h-32 flex items-center justify-center">
+      {/* 3D Blue Moving Elements */}
+      {!isSuccess && !isError && (
+        <div className="relative w-full h-full">
+          <motion.div
+            animate={{ 
+              rotateX: [0, 360], 
+              rotateY: [0, 360],
+              scale: [1, 1.1, 1]
+            }}
+            transition={{ repeat: Infinity, duration: 4, ease: "linear" }}
+            className="absolute inset-0 border-[6px] border-bkash/20 rounded-full shadow-[0_0_30px_rgba(226,19,110,0.2)]"
+          />
+          <motion.div
+            animate={{ 
+              rotateX: [360, 0], 
+              rotateY: [0, 360],
+              scale: [1.1, 1, 1.1]
+            }}
+            transition={{ repeat: Infinity, duration: 3, ease: "linear" }}
+            className="absolute inset-4 border-[4px] border-blue-500 rounded-full shadow-[0_0_20px_rgba(59,130,246,0.3)]"
+          />
+          <motion.div
+            animate={{ 
+              y: [-10, 10, -10],
+              rotateZ: [0, 360]
+            }}
+            transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+            className="absolute inset-10 bg-gradient-to-tr from-bkash to-blue-600 rounded-2xl shadow-2xl flex items-center justify-center"
+          >
+            <Landmark className="w-8 h-8 text-white" />
+          </motion.div>
+        </div>
+      )}
+
+      {isSuccess && (
+        <motion.div 
+          initial={{ scale: 0 }}
+          animate={{ scale: 1, rotate: 360 }}
+          className="w-24 h-24 bg-emerald-500 rounded-full flex items-center justify-center shadow-2xl shadow-emerald-200"
+        >
+          <motion.div
+            animate={{ scale: [1, 1.2, 1] }}
+            transition={{ repeat: Infinity, duration: 2 }}
+          >
+            <CheckCircle2 className="w-12 h-12 text-white" />
+          </motion.div>
+        </motion.div>
+      )}
+
+      {isError && (
+        <motion.div 
+          initial={{ scale: 0 }}
+          animate={{ scale: 1, rotate: -10 }}
+          className="w-24 h-24 bg-rose-500 rounded-full flex items-center justify-center shadow-2xl shadow-rose-200"
+        >
+          <motion.div
+            animate={{ x: [-2, 2, -2] }}
+            transition={{ repeat: Infinity, duration: 0.2 }}
+          >
+            <X className="w-12 h-12 text-white" />
+          </motion.div>
+        </motion.div>
       )}
     </div>
-    <div className="mt-6 flex flex-col items-center">
-      <p className="text-[10px] font-black text-slate-800 uppercase tracking-[0.3em] mb-1">
-        {isSuccess ? 'সম্পন্ন হয়েছে' : 'প্রসেসিং হচ্ছে'}
-      </p>
-      {!isSuccess && (
-        <div className="flex gap-1.5">
+
+    <div className="mt-8 flex flex-col items-center">
+      <motion.p 
+        animate={{ opacity: [0.5, 1, 0.5] }}
+        transition={{ repeat: Infinity, duration: 1.5 }}
+        className="text-[12px] font-black text-slate-800 uppercase tracking-[0.4em] mb-3"
+      >
+        {isSuccess ? 'সফল হয়েছে' : isError ? 'ব্যর্থ হয়েছে' : 'প্রসেসিং হচ্ছে'}
+      </motion.p>
+      
+      {!isSuccess && !isError && (
+        <div className="flex gap-2">
           {[0, 1, 2].map((i) => (
             <motion.div
               key={i}
-              animate={{ scale: [1, 1.5, 1], opacity: [0.5, 1, 0.5] }}
-              transition={{ repeat: Infinity, duration: 1, delay: i * 0.2 }}
-              className="w-1.5 h-1.5 bg-bkash rounded-full"
+              animate={{ 
+                scale: [1, 2, 1], 
+                backgroundColor: ["#e2136e", "#3b82f6", "#e2136e"],
+                borderRadius: ["50%", "20%", "50%"]
+              }}
+              transition={{ repeat: Infinity, duration: 1.5, delay: i * 0.3 }}
+              className="w-2 h-2 bg-bkash shadow-lg"
             />
           ))}
         </div>
+      )}
+      
+      {(isSuccess || isError) && (
+        <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">
+          {isSuccess ? 'ধন্যবাদ, আপনার অনুরোধটি সম্পন্ন হয়েছে' : 'দুঃখিত, কোনো একটি সমস্যা হয়েছে'}
+        </p>
       )}
     </div>
   </motion.div>
 );
 
-const Countdown = ({ dateStr }: { dateStr: string }) => {
+const Countdown = ({ dateStr, compact }: { dateStr: string, compact?: boolean }) => {
   const { total, days, hours, minutes, seconds } = getTimeRemaining(dateStr);
   
   if (total < 0) {
     return (
-      <div className="flex items-center gap-1.5 px-3 py-1 bg-rose-50 text-rose-600 rounded-xl border border-rose-100 shadow-sm">
-        <Clock className="w-3 h-3" />
-        <span className="font-black text-[9px] uppercase tracking-widest">Expired</span>
+      <div className={`flex items-center gap-1 px-2 py-0.5 bg-rose-50 text-rose-600 rounded-lg border border-rose-100 ${compact ? 'scale-90' : ''}`}>
+        <Clock className="w-2.5 h-2.5" />
+        <span className="font-extrabold text-[8px] uppercase tracking-tighter">Expired</span>
+      </div>
+    );
+  }
+
+  if (compact) {
+    const units = [
+      { label: 'দিন', value: days },
+      { label: 'ঘন্টা', value: hours },
+      { label: 'মিনিট', value: minutes },
+    ];
+    return (
+      <div className="flex items-center gap-1">
+        {units.map((u, i) => (
+          <div key={i} className="flex flex-col items-center">
+            <span className={`text-[10px] font-black leading-none ${u.label === 'দিন' ? 'text-bkash' : 'text-slate-700'}`}>
+              {toBn(String(u.value).padStart(2, '0'))}
+            </span>
+            <span className="text-[5px] text-slate-400 font-bold uppercase tracking-tighter">{u.label}</span>
+          </div>
+        ))}
       </div>
     );
   }
@@ -212,6 +299,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [isError, setIsError] = useState(false);
 
   const showSuccess = async () => {
     setIsSuccess(true);
@@ -382,6 +470,8 @@ export default function App() {
     
     const formData = new FormData(form);
     setIsProcessing(true);
+    // Artificial delay for user request
+    await new Promise(resolve => setTimeout(resolve, 20000));
     
     const userData = {
       name: formData.get('name') as string,
@@ -400,24 +490,37 @@ export default function App() {
       } else {
         await addDoc(collection(db, 'users'), userData);
       }
+      setIsSuccess(true);
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      setIsSuccess(false);
       setIsProcessing(false);
-      await showSuccess();
       setShowAddEditModal(false);
       setEditingUser(null);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'users');
+      setIsError(true);
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      setIsError(false);
       setIsProcessing(false);
     }
   };
 
   const deleteUser = async (id: string) => {
     setIsProcessing(true);
+    // Artificial delay for user request
+    await new Promise(resolve => setTimeout(resolve, 20000));
     try {
       await deleteDoc(doc(db, 'users', id));
+      setIsSuccess(true);
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      setIsSuccess(false);
       setShowDeleteModal(false);
       setUserToDelete(null);
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `users/${id}`);
+      setIsError(true);
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      setIsError(false);
     } finally {
       setIsProcessing(false);
     }
@@ -426,6 +529,8 @@ export default function App() {
   const processCollection = async () => {
     if (!collectingUser || !extendMonths || !collectionAmount) return;
     setIsProcessing(true);
+    // Artificial delay for user request
+    await new Promise(resolve => setTimeout(resolve, 20000));
     
     const months = parseInt(extendMonths);
     const cost = parseFloat(collectionAmount);
@@ -455,15 +560,20 @@ export default function App() {
         history: updatedHistory
       });
       
+      setIsSuccess(true);
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      setIsSuccess(false);
       setIsProcessing(false);
       setShowCollectionModal(false);
-      await showSuccess();
       setCollectingUser(null);
       setExtendMonths('');
       setCollectionAmount('');
       alert(`✅ টাকা সংগ্রহ ও মেয়াদ বৃদ্ধি সম্পন্ন!\n\nসংগ্রহ: ${toBn(cost.toLocaleString())} টাকা\nমেয়াদ বৃদ্ধি: ${toBn(months)} মাস`);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `users/${collectingUser.id}`);
+      setIsError(true);
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      setIsError(false);
       setIsProcessing(false);
     }
   };
@@ -477,15 +587,27 @@ export default function App() {
     window.focus();
     window.print();
     setIsProcessing(true);
-    await showSuccess();
+    // Artificial delay for user request
+    await new Promise(resolve => setTimeout(resolve, 20000));
+    setIsSuccess(true);
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    setIsSuccess(false);
     setIsProcessing(false);
   };
 
   const handleLogout = async () => {
     setIsProcessing(true);
+    // Artificial delay for user request
+    await new Promise(resolve => setTimeout(resolve, 20000));
     try {
       await firebaseLogout();
-      await showSuccess();
+      setIsSuccess(true);
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      setIsSuccess(false);
+    } catch (error) {
+      setIsError(true);
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      setIsError(false);
     } finally {
       setIsProcessing(false);
     }
@@ -517,9 +639,13 @@ export default function App() {
           <button 
             onClick={async () => {
               setIsProcessing(true);
+              // Artificial delay for user request
+              await new Promise(resolve => setTimeout(resolve, 20000));
               try {
                 await signInWithGoogle();
-                await showSuccess();
+                setIsSuccess(true);
+                await new Promise(resolve => setTimeout(resolve, 3000));
+                setIsSuccess(false);
               } catch (error: any) {
                 console.error("Login failed:", error);
                 alert(`Login failed: ${error.message || 'Unknown error'}. Please ensure this domain is added to Firebase Authorized Domains.`);
@@ -545,7 +671,7 @@ export default function App() {
   }
 
   return (
-    <div className="flex min-h-screen text-[10px] bg-slate-50">
+    <div className="flex min-h-screen text-[8px] bg-slate-50 overflow-x-hidden w-full max-w-full">
       <AnimatePresence>
         {isLoading && (
           <motion.div 
@@ -626,9 +752,9 @@ export default function App() {
                 <div className="flex items-center gap-2 mt-1.5 overflow-hidden">
                   <p className="text-slate-400 text-[8px] font-bold uppercase tracking-widest truncate hidden sm:block">চুক্তি ও পাওয়ার ব্যালেন্স ট্র্যাকিং</p>
                   <span className="w-1 h-1 bg-slate-200 rounded-full hidden sm:block"></span>
-                  <p className="text-bkash text-[8px] font-black uppercase tracking-widest flex items-center gap-1 shrink-0">
-                    <Clock className="w-3 h-3" /> {liveTime.toLocaleTimeString('bn-BD')}
-                  </p>
+              <p className="text-bkash text-[8px] font-black uppercase tracking-widest flex items-center gap-1 shrink-0">
+                <Clock className="w-3 h-3" /> {liveTime.toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </p>
                 </div>
               </div>
               <div className="flex items-center gap-2 md:hidden">
@@ -683,8 +809,8 @@ export default function App() {
                 <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${stat.color} flex items-center justify-center text-white mb-2 shadow-lg shadow-pink-100 group-hover:scale-110 transition-transform`}>
                   <stat.icon className="w-5 h-5" />
                 </div>
-                <h3 className="text-base sm:text-xl md:text-2xl font-black text-slate-800 tracking-tight">{stat.val}</h3>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{stat.label}</p>
+                <h3 className="text-[12px] sm:text-lg md:text-xl font-black text-slate-800 tracking-tight">{stat.val}</h3>
+                <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{stat.label}</p>
               </motion.div>
             ))}
           </section>
@@ -698,7 +824,7 @@ export default function App() {
                 type="text" 
                 placeholder="নাম, মোবাইল বা ঠিকানা দিয়ে খুঁজুন..." 
                 aria-label="রেকর্ড খুঁজুন"
-                className="relative w-full pl-14 pr-5 py-4 bg-slate-50/50 border border-slate-100 rounded-[1.25rem] focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/5 transition-all outline-none text-xs font-bold shadow-sm placeholder:text-slate-300 truncate"
+                className="relative w-full pl-14 pr-5 py-4 bg-slate-50/50 border border-slate-100 rounded-[1.25rem] focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/5 transition-all outline-none text-[8px] font-bold shadow-sm placeholder:text-slate-300 truncate"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -775,7 +901,7 @@ export default function App() {
                               getStatus(getDaysLeft(user.expireDate)) === 'active' ? 'bg-emerald-500' : getStatus(getDaysLeft(user.expireDate)) === 'warning' ? 'bg-amber-500' : 'bg-bkash'
                             }`} />
                             <div className="min-w-0">
-                              <h4 className="font-extrabold text-slate-800 uppercase tracking-tight text-[11px] truncate max-w-[170px]">
+                              <h4 className="font-extrabold text-slate-800 uppercase tracking-tight text-[8px] truncate max-w-[170px]">
                                 {user.name}
                               </h4>
                               <div className="flex items-center gap-1.5 text-[9px] text-bkash font-black tracking-widest mt-0.5">
@@ -784,7 +910,7 @@ export default function App() {
                               </div>
                             </div>
                           </div>
-                          <div className="bg-bkash-light/20 text-bkash px-2.5 py-1 rounded-lg border border-bkash/5 font-black text-[10px]">
+                          <div className="bg-bkash-light/20 text-bkash px-2.5 py-1 rounded-lg border border-bkash/5 font-black text-[8px]">
                             {toBn(user.pwrBalance.toLocaleString())} ৳
                           </div>
                         </div>
@@ -801,9 +927,9 @@ export default function App() {
                               <Calendar className="w-2.5 h-2.5 text-bkash" /> মেয়াদ শেষ
                             </p>
                             <div className="flex items-center gap-3">
-                              <p className="text-[10px] font-black text-slate-800 leading-none">{formatDate(user.expireDate)}</p>
+                              <p className="text-[8px] font-black text-slate-800 leading-none">{formatDate(user.expireDate)}</p>
                               <div className="scale-[0.85] origin-left border-l border-slate-200 pl-3">
-                                <Countdown dateStr={user.expireDate} />
+                                <Countdown dateStr={user.expireDate} compact />
                               </div>
                             </div>
                           </div>
@@ -932,7 +1058,7 @@ export default function App() {
                                 </td>
                                 <td className="px-4 py-6">
                                   <div className="flex flex-col gap-1 max-w-[200px]">
-                                    <h4 className="font-extrabold text-slate-800 uppercase tracking-tight text-[11px] group-hover:text-bkash transition-colors truncate">
+                                    <h4 className="font-extrabold text-slate-800 uppercase tracking-tight text-[9px] group-hover:text-bkash transition-colors truncate">
                                       {user.name}
                                     </h4>
                                     <div className="flex items-center gap-2 text-[8px] text-slate-400 font-bold">
@@ -953,19 +1079,17 @@ export default function App() {
                                 <td className="px-4 py-6">
                                   <div className="flex flex-col items-center gap-1">
                                     <div className="flex items-center gap-1.5 px-3 py-1.5 bg-bkash-light/20 text-bkash rounded-xl border border-bkash/5">
-                                      <span className="text-[11px] font-black tabular-nums">{toBn(user.pwrBalance.toLocaleString())} ৳</span>
+                                      <span className="text-[9px] font-black tabular-nums">{toBn(user.pwrBalance.toLocaleString())} ৳</span>
                                     </div>
                                     <span className="text-[7px] font-black text-slate-300 uppercase tracking-widest">টোটাল: {toBn(user.amount.toLocaleString())} ৳</span>
                                   </div>
                                 </td>
                                 <td className="px-4 py-6">
-                                  <div className="flex flex-col items-center gap-2">
+                                  <div className="flex flex-col items-center gap-1.5 min-w-[120px]">
                                     <div className="flex items-center gap-2 text-[10px] font-black text-slate-600 tracking-tight tabular-nums">
                                       <Calendar className="w-3 h-3 text-slate-300" /> {formatDate(user.expireDate)}
                                     </div>
-                                    <div className="scale-90 origin-top transition-transform group-hover:scale-100">
-                                      <Countdown dateStr={user.expireDate} />
-                                    </div>
+                                    <Countdown dateStr={user.expireDate} compact />
                                   </div>
                                 </td>
                                 <td className="px-8 py-6 text-right">
@@ -1036,6 +1160,8 @@ export default function App() {
             title="ব্যবহারকারী ডিলিট করুন" 
             onClose={() => setShowDeleteModal(false)}
             isLoading={isProcessing}
+            isSuccess={isSuccess}
+            isError={isError}
           >
             <div className="text-center p-4">
               <div className="w-20 h-20 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -1079,6 +1205,8 @@ export default function App() {
             title={editingUser ? "তথ্য সম্পাদন করুন" : "নতুন এন্ট্রি যোগ করুন"} 
             onClose={() => setShowAddEditModal(false)}
             isLoading={isProcessing}
+            isSuccess={isSuccess}
+            isError={isError}
           >
             <form onSubmit={handleAddEdit} className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
               <div className="space-y-1.5">
@@ -1140,6 +1268,7 @@ export default function App() {
             onClose={() => setShowViewModal(false)}
             isLoading={isProcessing}
             isSuccess={isSuccess}
+            isError={isError}
           >
             <div className="flex bg-slate-100 p-1.5 rounded-2xl mb-6 no-print">
               <button 
@@ -1262,18 +1391,18 @@ export default function App() {
                   )}
                 </div>
               ) : viewMode === 'card' ? (
-                <div id="print-card" className="w-full max-w-sm mx-auto bg-white border-2 border-slate-900 rounded-sm p-4 md:p-6 overflow-hidden">
+                <div id="print-card" className="w-[350px] max-w-full mx-auto bg-white border-2 border-slate-900 rounded-sm p-6 overflow-hidden">
                   <div className="flex border-b border-slate-900 pb-3 mb-4 justify-between items-center text-slate-800">
-                    <div className="flex items-center gap-1.5">
-                      <Landmark className="w-4 h-4" />
-                      <span className="text-[8px] font-black uppercase tracking-[0.2em]">অফিসিয়াল কার্ড</span>
+                    <div className="flex items-center gap-2">
+                      <Landmark className="w-5 h-5" />
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em]">অফিসিয়াল কার্ড</span>
                     </div>
-                    <span className="text-[8px] font-black uppercase">আইডি: {toBn(viewingUser.id.slice(-6).toUpperCase())}</span>
+                    <span className="text-[10px] font-black uppercase">আইডি: {toBn(viewingUser.id.slice(-6).toUpperCase())}</span>
                   </div>
                   
-                  <div className="space-y-3">
-                    <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight break-words">{viewingUser.name}</h3>
-                    <div className="grid grid-cols-1 gap-2.5 pt-2 border-t border-slate-100">
+                  <div className="space-y-4">
+                    <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight break-words">{viewingUser.name}</h3>
+                    <div className="grid grid-cols-1 gap-3 pt-3 border-t border-slate-100">
                       {[
                         { label: 'মোবাইল', value: toBn(viewingUser.mobile) },
                         { label: 'ঠিকানা', value: viewingUser.address },
@@ -1281,14 +1410,14 @@ export default function App() {
                         { label: 'ব্যালেন্স', value: toBn(viewingUser.pwrBalance.toLocaleString()) + ' ৳' },
                         { label: 'মেয়াদ শেষ', value: toBn(formatDate(viewingUser.expireDate)) },
                       ].map((item, idx) => (
-                        <div key={idx} className="flex border-b border-slate-50 pb-1.5 overflow-hidden">
-                          <span className="w-24 shrink-0 text-[8px] font-bold text-slate-400 uppercase">{item.label}:</span>
-                          <span className="text-[9px] font-black text-slate-900 flex-1 min-w-0 break-words">{item.value}</span>
+                        <div key={idx} className="flex border-b border-slate-50 pb-2 overflow-hidden">
+                          <span className="w-28 shrink-0 text-[10px] font-bold text-slate-400 uppercase">{item.label}:</span>
+                          <span className="text-[11px] font-black text-slate-900 flex-1 min-w-0 break-words">{item.value}</span>
                         </div>
                       ))}
                     </div>
-                    <div className="flex justify-center pt-2">
-                       <div className={`px-4 py-1 border border-slate-900 text-[7px] font-black uppercase tracking-[0.2em] ${
+                    <div className="flex justify-center pt-4">
+                       <div className={`px-6 py-2 border-2 border-slate-900 text-[10px] font-black uppercase tracking-[0.3em] ${
                          getDaysLeft(viewingUser.expireDate) < 0 ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'
                        }`}>
                          {getDaysLeft(viewingUser.expireDate) < 0 ? 'মেয়াদ উত্তীর্ণ' : 'যাচাইকৃত ইউজার'}
@@ -1445,6 +1574,7 @@ export default function App() {
             onClose={() => setShowCollectionModal(false)}
             isLoading={isProcessing}
             isSuccess={isSuccess}
+            isError={isError}
           >
             {/* User Info Header */}
             <div className="bg-slate-50 rounded-3xl p-6 mb-6 border border-slate-100">
@@ -1650,7 +1780,9 @@ export default function App() {
           <Modal 
             title="প্রতিবেদন জেনারেট করুন" 
             onClose={() => setShowReportsModal(false)}
+            isLoading={isProcessing}
             isSuccess={isSuccess}
+            isError={isError}
           >
             <div className="space-y-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1733,7 +1865,17 @@ export default function App() {
 
                     <div className="pt-6 border-t border-slate-100 flex gap-4">
                       <button
-                        onClick={() => downloadCSV(reportData, `Report_${reportRange.start}_to_${reportRange.end}.csv`)}
+                        onClick={async () => {
+                          setIsProcessing(true);
+                          // Artificial delay for user request
+                          await new Promise(resolve => setTimeout(resolve, 20000));
+                          downloadCSV(reportData, `Report_${reportRange.start}_to_${reportRange.end}.csv`);
+                          setIsSuccess(true);
+                          await new Promise(resolve => setTimeout(resolve, 3000));
+                          setIsSuccess(false);
+                          setIsProcessing(false);
+                          setShowReportsModal(false);
+                        }}
                         className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] shadow-xl shadow-slate-200 hover:bg-slate-800 active:scale-95 transition-all flex items-center justify-center gap-2"
                       >
                         <FileDown className="w-4 h-4" /> CSV এক্সপোর্ট করুন
@@ -1764,7 +1906,7 @@ export default function App() {
 }
 
 // Modal Component Helper
-function Modal({ title, children, onClose, isLoading, isSuccess }: { title: string, children: React.ReactNode, onClose: () => void, isLoading?: boolean, isSuccess?: boolean }) {
+function Modal({ title, children, onClose, isLoading, isSuccess, isError }: { title: string, children: React.ReactNode, onClose: () => void, isLoading?: boolean, isSuccess?: boolean, isError?: boolean }) {
   const modalId = React.useId();
   
   return (
@@ -1783,16 +1925,16 @@ function Modal({ title, children, onClose, isLoading, isSuccess }: { title: stri
         animate={{ y: 0 }}
         exit={{ y: "100%" }}
         transition={{ type: "spring", damping: 25, stiffness: 400 }}
-        className="bg-white rounded-t-[2rem] sm:rounded-[2.5rem] shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto p-6 sm:p-8 lg:p-10 relative"
+        className="bg-white rounded-t-[2rem] sm:rounded-[2.5rem] shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto p-6 sm:p-8 lg:p-10 relative overflow-x-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        {isLoading && <ActionSpinner isSuccess={isSuccess} />}
+        {isLoading && <ActionSpinner isSuccess={isSuccess} isError={isError} />}
         <motion.div 
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           className="flex justify-between items-center mb-4 sm:mb-8 sticky top-0 bg-white z-10 py-1 sm:py-2 -mt-2"
         >
-          <h2 id={modalId} className="text-sm sm:text-lg font-black text-slate-800 tracking-tight">{title}</h2>
+          <h2 id={modalId} className="text-[12px] sm:text-lg font-black text-slate-800 tracking-tight">{title}</h2>
           <button 
             disabled={isLoading}
             onClick={onClose} 
@@ -1802,7 +1944,7 @@ function Modal({ title, children, onClose, isLoading, isSuccess }: { title: stri
             <X className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
           </button>
         </motion.div>
-        <div className="pb-4 sm:pb-0">
+        <div className="pb-4 sm:pb-0 overflow-x-hidden w-full">
           {children}
         </div>
       </motion.div>
