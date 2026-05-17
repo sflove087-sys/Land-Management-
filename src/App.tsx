@@ -49,10 +49,13 @@ import {
   Gavel,
   ScrollText,
   UserCheck,
-  Download
+  Download,
+  UserMinus,
+  ArrowUpCircle,
+  Ban
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { domToCanvas } from 'modern-screenshot';
+import { toPng } from 'html-to-image';
 import { jsPDF } from 'jspdf';
 import { User, StatusFilter, INITIAL_USERS, SortConfig } from './types';
 import { getDaysLeft, getStatus, formatDate, getTimeRemaining, toBn, downloadCSV } from './utils';
@@ -338,14 +341,19 @@ export default function App() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [showViewModal, setShowViewModal] = useState(false);
   const [viewingUser, setViewingUser] = useState<User | null>(null);
-  const [viewMode, setViewMode] = useState<'details' | 'card' | 'portfolio'>('details');
+  const [viewMode, setViewMode] = useState<'details' | 'card' | 'portfolio' | 'receipt'>('details');
   const [showCollectionModal, setShowCollectionModal] = useState(false);
   const [collectingUser, setCollectingUser] = useState<User | null>(null);
   const [extendMonths, setExtendMonths] = useState<string>('');
   const [collectionAmount, setCollectionAmount] = useState<string>('');
+  const [collectionTerms, setCollectionTerms] = useState<string>('');
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showReportsModal, setShowReportsModal] = useState(false);
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [withdrawingUser, setWithdrawingUser] = useState<User | null>(null);
+  const [withdrawAmount, setWithdrawAmount] = useState<string>('');
+  const [withdrawPurpose, setWithdrawPurpose] = useState<string>('');
   const [reportRange, setReportRange] = useState({ 
     start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0], 
     end: new Date().toISOString().split('T')[0] 
@@ -406,7 +414,7 @@ export default function App() {
   const filteredUsers = useMemo(() => {
     let result = users.filter(user => {
       const daysLeft = getDaysLeft(user.expireDate);
-      const status = getStatus(daysLeft);
+      const status = user.isActive === false ? 'deactivated' : getStatus(daysLeft);
       const matchesFilter = filter === 'all' || status === filter;
       const matchesSearch = 
         user.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -479,13 +487,15 @@ export default function App() {
   };
 
   const stats = useMemo(() => {
+    const activeUsers = users.filter(u => u.isActive !== false);
     const totalAmount = users.reduce((acc, u) => acc + u.amount, 0);
     const totalCollected = users.reduce((acc, u) => acc + (u.amount - u.pwrBalance), 0);
-    const active = users.filter(u => getStatus(getDaysLeft(u.expireDate)) === 'active').length;
-    const warning = users.filter(u => getStatus(getDaysLeft(u.expireDate)) === 'warning').length;
+    const active = activeUsers.filter(u => getStatus(getDaysLeft(u.expireDate)) === 'active').length;
+    const warning = activeUsers.filter(u => getStatus(getDaysLeft(u.expireDate)) === 'warning').length;
+    const deactivated = users.filter(u => u.isActive === false).length;
     const collectionRate = totalAmount > 0 ? ((totalCollected / totalAmount) * 100).toFixed(1) : '0';
 
-    return { totalAmount, active, warning, collectionRate, totalUsers: users.length };
+    return { totalAmount, active, warning, deactivated, collectionRate, totalUsers: users.length };
   }, [users]);
 
   const handleAddEdit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -507,6 +517,8 @@ export default function App() {
       expireDate: formData.get('expireDate') as string,
       pwrBalance: parseFloat(formData.get('pwrBalance') as string),
       chukirdharirName: formData.get('chukirdharirName') as string,
+      isActive: editingUser ? editingUser.isActive : true,
+      withdrawals: editingUser ? (editingUser.withdrawals || []) : []
     };
 
     try {
@@ -580,8 +592,10 @@ export default function App() {
     try {
       const updatedHistory = [...(collectingUser.history || []), newHistoryEntry];
       await updateDoc(doc(db, 'users', collectingUser.id), {
+        amount: collectingUser.amount + cost,
         expireDate: newExpiryDate,
         pwrBalance: collectingUser.pwrBalance - cost,
+        terms: collectionTerms,
         history: updatedHistory
       });
       
@@ -604,8 +618,90 @@ export default function App() {
   };
 
   const handleOpenCollection = (user: User) => {
+    if (user.isActive === false) {
+      alert("ডিঅ্যাক্টিভেটেড একাউন্টে টাকা সংগ্রহ করা সম্ভব নয়। আগে একাউন্টটি অ্যাক্টিভেট করুন।");
+      return;
+    }
     setCollectingUser(user);
+    setExtendMonths('');
+    setCollectionAmount('');
+    setCollectionTerms(user.terms || '');
     setShowCollectionModal(true);
+  };
+
+  const toggleUserStatus = async (user: User) => {
+    setIsProcessing(true);
+    // Artificial delay
+    await new Promise(resolve => setTimeout(resolve, 800));
+    try {
+      await updateDoc(doc(db, 'users', user.id), {
+        isActive: user.isActive === false ? true : false
+      });
+      setIsSuccess(true);
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      setIsSuccess(false);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `users/${user.id}`);
+      setIsError(true);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      setIsError(false);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleOpenWithdraw = (user: User) => {
+    setWithdrawingUser(user);
+    setShowWithdrawModal(true);
+  };
+
+  const processWithdrawal = async () => {
+    if (!withdrawingUser || !withdrawAmount) return;
+    const amountToWithdraw = parseFloat(withdrawAmount);
+    
+    if (isNaN(amountToWithdraw) || amountToWithdraw <= 0) {
+      alert("অনুগ্রহ করে সঠিক টাকার পরিমাণ লিখুন");
+      return;
+    }
+
+    if (amountToWithdraw > withdrawingUser.amount) {
+      alert("চুক্তির পরিমাণের চেয়ে বেশি টাকা উত্তোলন সম্ভব নয়!");
+      return;
+    }
+
+    setIsProcessing(true);
+    // Artificial delay
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    const newWithdrawal = {
+      date: new Date().toISOString(),
+      amount: amountToWithdraw,
+      purpose: withdrawPurpose || 'চুক্তি ভিত্তিক উত্তোলন'
+    };
+
+    try {
+      const updatedWithdrawals = [...(withdrawingUser.withdrawals || []), newWithdrawal];
+      await updateDoc(doc(db, 'users', withdrawingUser.id), {
+        amount: withdrawingUser.amount - amountToWithdraw,
+        withdrawals: updatedWithdrawals
+      });
+
+      setIsSuccess(true);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      setIsSuccess(false);
+      setIsProcessing(false);
+      setShowWithdrawModal(false);
+      setWithdrawingUser(null);
+      setWithdrawAmount('');
+      setWithdrawPurpose('');
+      alert(`✅ টাকা উত্তোলন সম্পন্ন!\n\nপরিমাণ: ${toBn(amountToWithdraw.toLocaleString())} টাকা`);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, `users/${withdrawingUser.id}`);
+      setIsError(true);
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      setIsError(false);
+      setIsProcessing(false);
+    }
   };
 
   const handlePrint = async () => {
@@ -629,12 +725,19 @@ export default function App() {
       // Small delay to ensure any transient UI states are settled
       await new Promise(resolve => setTimeout(resolve, 100));
       
-      const canvas = await domToCanvas(element, {
-        scale: 3, // Very high quality for print
-        backgroundColor: '#ffffff'
+      const imgData = await toPng(element, {
+        quality: 1,
+        pixelRatio: 3,
+        backgroundColor: '#ffffff',
+        style: {
+          // Force some standard colors if oklch is still an issue
+          '--color-bkash': '#e2136e',
+          '--color-emerald-500': '#10b981',
+          '--color-amber-500': '#f59e0b',
+          '--color-rose-500': '#f43f5e',
+        } as any
       });
       
-      const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF({
         orientation: 'p',
         unit: 'mm',
@@ -783,38 +886,45 @@ export default function App() {
             { id: 'active', label: 'সক্রিয়', icon: CheckCircle },
             { id: 'expired', label: 'মেয়াদ শেষ', icon: Clock },
             { id: 'warning', label: 'সতর্কতা', icon: AlertTriangle },
+            { id: 'deactivated', label: 'বন্ধ', icon: Ban },
           ].map((item) => (
-            <button
+            <motion.button
               key={item.id}
+              whileHover={{ x: 5, backgroundColor: "var(--color-slate-50)" }}
+              whileTap={{ scale: 0.98 }}
               onClick={() => setFilter(item.id as StatusFilter)}
               aria-current={filter === item.id ? 'page' : undefined}
               className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all font-bold ${
                 filter === item.id 
                   ? 'bg-bkash-light text-bkash shadow-sm' 
-                  : 'text-slate-400 hover:bg-slate-50 hover:text-slate-800'
+                  : 'text-slate-400 hover:text-slate-800'
               }`}
             >
-              <item.icon className="w-5 h-5" />
+              <item.icon className="w-5 h-5 transition-transform group-hover:scale-110" />
               <span className="text-[8px] uppercase tracking-wide">{item.label}</span>
-            </button>
+            </motion.button>
           ))}
 
-          <button
+          <motion.button
+            whileHover={{ x: 5, backgroundColor: "var(--color-slate-50)" }}
+            whileTap={{ scale: 0.98 }}
             onClick={() => setShowReportsModal(true)}
-            className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all font-bold text-slate-400 hover:bg-slate-50 hover:text-slate-800"
+            className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all font-bold text-slate-400 hover:text-slate-800"
           >
-            <FileBarChart className="w-5 h-5 text-bkash" />
+            <FileBarChart className="w-5 h-5 text-bkash transition-transform group-hover:scale-110" />
             <span className="text-[8px] uppercase tracking-wide">প্রতিবেদন</span>
-          </button>
+          </motion.button>
           
           <div className="pt-8 border-t border-slate-50 mt-8">
-            <button
+            <motion.button
+              whileHover={{ backgroundColor: "var(--color-rose-50)" }}
+              whileTap={{ scale: 0.98 }}
               onClick={handleLogout}
-              className="w-full flex items-center gap-3 px-5 py-4 rounded-2xl font-black uppercase tracking-[0.15em] text-[8px] text-rose-500 hover:bg-rose-50 transition-all"
+              className="w-full flex items-center gap-3 px-5 py-4 rounded-2xl font-black uppercase tracking-[0.15em] text-[8px] text-rose-500 transition-all"
             >
               <LogOut className="w-4 h-4" />
               লগআউট
-            </button>
+            </motion.button>
           </div>
         </nav>
       </aside>
@@ -836,29 +946,35 @@ export default function App() {
                 </div>
               </div>
               <div className="flex items-center gap-2 md:hidden">
-                <button 
+                <motion.button 
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.9 }}
                   onClick={handleLogout}
                   aria-label="লগআউট করুন"
-                  className="p-3 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center transition-all active:scale-95 border border-rose-100"
+                  className="p-3 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center transition-all border border-rose-100"
                 >
                   <LogOut className="w-5 h-5" />
-                </button>
-                <button 
+                </motion.button>
+                <motion.button 
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.9 }}
                   onClick={() => { setEditingUser(null); setShowAddEditModal(true); }}
                   aria-label="নতুন এন্ট্রি যোগ করুন"
-                  className="p-3 bg-bkash text-white rounded-xl shadow-lg shadow-bkash/20 flex items-center justify-center transition-all active:scale-95"
+                  className="p-3 bg-bkash text-white rounded-xl shadow-lg shadow-bkash/20 flex items-center justify-center transition-all"
                 >
                   <Plus className="w-5 h-5" />
-                </button>
+                </motion.button>
               </div>
             </div>
-            <button 
+            <motion.button 
+              whileHover={{ scale: 1.02, y: -2 }}
+              whileTap={{ scale: 0.98 }}
               onClick={() => { setEditingUser(null); setShowAddEditModal(true); }}
-              className="hidden md:flex px-6 py-3.5 bg-bkash text-white rounded-2xl font-black shadow-lg shadow-bkash/20 hover:bg-bkash-dark transition-all hover:-translate-y-0.5 items-center gap-2 text-[10px] uppercase tracking-widest"
+              className="hidden md:flex px-6 py-3.5 bg-bkash text-white rounded-2xl font-black shadow-lg shadow-bkash/20 hover:bg-bkash-dark transition-all items-center gap-2 text-[10px] uppercase tracking-widest"
             >
               <Plus className="w-4 h-4" />
               নতুন এন্ট্রি যোগ করুন
-            </button>
+            </motion.button>
           </header>
 
           {/* Stats Grid */}
@@ -868,6 +984,7 @@ export default function App() {
               { label: 'মোট ইউজার', val: toBn(stats.totalUsers), icon: Users, color: 'from-fuchsia-500 to-pink-600', action: () => { setFilter('all'); window.scrollTo({ top: 800, behavior: 'smooth' }); } },
               { label: 'সক্রিয় ইউজার', val: toBn(stats.active), icon: CircleCheck, color: 'from-emerald-400 to-emerald-600', action: () => { setFilter('active'); window.scrollTo({ top: 800, behavior: 'smooth' }); } },
               { label: 'সতর্কতা (৩০ দিন)', val: toBn(stats.warning), icon: AlertTriangle, color: 'from-amber-400 to-amber-600', action: () => { setFilter('warning'); window.scrollTo({ top: 800, behavior: 'smooth' }); } },
+              { label: 'বন্ধ একাউন্ট', val: toBn(stats.deactivated), icon: Ban, color: 'from-slate-400 to-slate-600', action: () => { setFilter('deactivated'); window.scrollTo({ top: 800, behavior: 'smooth' }); } },
               { label: 'সংগ্রহের হার', val: toBn(stats.collectionRate) + '%', icon: TrendingUp, color: 'from-bkash to-bkash-dark', action: () => setShowReportsModal(true) },
             ].map((stat, i) => (
               <motion.div 
@@ -895,7 +1012,12 @@ export default function App() {
 
           {/* Dashboard Controls */}
           <div className="bg-white rounded-[2rem] p-3 md:p-5 mb-8 shadow-xl shadow-slate-100 border border-slate-100 flex flex-col xl:flex-row gap-4 md:gap-6 items-center w-full max-w-full overflow-hidden">
-            <div className="flex-1 relative group w-full min-w-0">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.3 }}
+              className="flex-1 relative group w-full min-w-0"
+            >
               <div className="absolute inset-0 bg-bkash/5 rounded-2xl blur-xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-500" />
               <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5 z-10 transition-colors group-focus-within:text-bkash" aria-hidden="true" />
               <input 
@@ -906,21 +1028,23 @@ export default function App() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
-            </div>
+            </motion.div>
             
             <div className="flex flex-col md:flex-row gap-3 w-full xl:w-auto shrink-0 overflow-hidden">
               <div className="flex bg-slate-50 p-1.5 rounded-[1.25rem] border border-slate-100/50 flex-1 md:flex-initial overflow-x-auto no-scrollbar scroll-smooth">
-                {(['all', 'active', 'expired', 'warning'] as StatusFilter[]).map((s) => (
-                  <button
+                {(['all', 'active', 'expired', 'warning', 'deactivated'] as StatusFilter[]).map((s) => (
+                  <motion.button
                     key={s}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
                     onClick={() => setFilter(s)}
                     aria-pressed={filter === s}
                     className={`whitespace-nowrap px-5 py-2.5 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all duration-300 flex-1 md:flex-none ${
-                      filter === s ? 'bg-white shadow-md text-bkash' : 'text-slate-400 hover:text-slate-600 hover:bg-white/50'
+                      filter === s ? 'bg-white shadow-md text-bkash' : 'text-slate-400 hover:text-slate-600'
                     }`}
                   >
-                    {s === 'all' ? 'সব' : s === 'active' ? 'সক্রিয়' : s === 'expired' ? 'মেয়াদ শেষ' : 'সতর্কতা'}
-                  </button>
+                    {s === 'all' ? 'সব' : s === 'active' ? 'সক্রিয়' : s === 'expired' ? 'মেয়াদ শেষ' : s === 'warning' ? 'সতর্কতা' : 'বন্ধ'}
+                  </motion.button>
                 ))}
               </div>
 
@@ -937,8 +1061,10 @@ export default function App() {
                   ].map((item) => {
                     const isActive = sortConfig.find(sc => sc.key === item.key);
                     return (
-                      <button
+                      <motion.button
                         key={item.key}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
                         onClick={(e) => toggleSort(item.key as keyof User, e.shiftKey)}
                         aria-label={`Sort by ${item.label}`}
                         aria-pressed={!!isActive}
@@ -950,7 +1076,7 @@ export default function App() {
                         {isActive && (
                           isActive.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
                         )}
-                      </button>
+                      </motion.button>
                     );
                   })}
                 </div>
@@ -1014,27 +1140,33 @@ export default function App() {
                         </div>
 
                         <div className="flex items-center justify-between gap-2.5 pt-3 border-t border-slate-100">
-                          <button 
+                          <motion.button 
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
                             onClick={() => { setViewingUser(user); setViewMode('card'); setShowViewModal(true); }}
                             className="flex-1 py-2.5 bg-bkash/5 text-bkash font-black uppercase tracking-widest text-[10px] rounded-lg flex items-center justify-center gap-1.5 border border-bkash/10"
                           >
                             <CreditCard className="w-3 h-3" /> কার্ড
-                          </button>
+                          </motion.button>
                           <div className="flex gap-1.5">
                             {[
-                              { icon: Eye, color: 'text-slate-400 bg-slate-50 border-slate-100', onClick: () => { setViewingUser(user); setViewMode('details'); setShowViewModal(true); } },
-                              { icon: Printer, color: 'text-blue-500 bg-blue-50 border-blue-100', onClick: () => { setViewingUser(user); setViewMode('portfolio'); setShowViewModal(true); } },
-                              { icon: HandCoins, color: 'text-emerald-500 bg-emerald-50 border-emerald-100', onClick: () => handleOpenCollection(user) },
-                              { icon: Edit, color: 'text-amber-500 bg-amber-50 border-amber-100', onClick: () => { setEditingUser(user); setShowAddEditModal(true); } },
-                              { icon: Trash2, color: 'text-rose-500 bg-rose-50 border-rose-100', onClick: () => { setUserToDelete(user); setShowDeleteModal(true); } },
+                              { icon: Eye, label: 'বিস্তারিত', color: 'text-slate-400 bg-slate-50 border-slate-100', onClick: () => { setViewingUser(user); setViewMode('details'); setShowViewModal(true); } },
+                              { icon: ArrowUpCircle, label: 'উত্তোলন', color: 'text-blue-500 bg-blue-50 border-blue-100', onClick: () => handleOpenWithdraw(user) },
+                              { icon: user.isActive ? UserMinus : UserCheck, label: user.isActive ? 'ডিঅ্যাক্টিভেট' : 'অ্যাক্টিভেট', color: user.isActive ? 'text-amber-500 bg-amber-50 border-amber-100' : 'text-emerald-500 bg-emerald-50 border-emerald-100', onClick: () => toggleUserStatus(user) },
+                              { icon: HandCoins, label: 'সংগ্রহ', color: 'text-emerald-500 bg-emerald-50 border-emerald-100', onClick: () => handleOpenCollection(user) },
+                              { icon: Edit, label: 'সম্পাদন', color: 'text-amber-500 bg-amber-50 border-amber-100', onClick: () => { setEditingUser(user); setShowAddEditModal(true); } },
+                              { icon: Trash2, label: 'ডিলিট', color: 'text-rose-500 bg-rose-50 border-rose-100', onClick: () => { setUserToDelete(user); setShowDeleteModal(true); } },
                             ].map((action, i) => (
-                              <button
+                              <motion.button
                                 key={i}
+                                whileHover={{ scale: 1.1, y: -2 }}
+                                whileTap={{ scale: 0.9 }}
                                 onClick={action.onClick}
-                                className={`w-8 h-8 rounded-lg border flex items-center justify-center transition-all ${action.color} active:scale-90`}
+                                aria-label={action.label}
+                                className={`w-8 h-8 rounded-lg border flex items-center justify-center transition-all ${action.color}`}
                               >
                                 <action.icon className="w-3.5 h-3.5" />
-                              </button>
+                              </motion.button>
                             ))}
                           </div>
                         </div>
@@ -1116,7 +1248,7 @@ export default function App() {
                         <AnimatePresence mode="popLayout">
                           {filteredUsers.map((user, idx) => {
                             const daysLeft = getDaysLeft(user.expireDate);
-                            const status = getStatus(daysLeft);
+                            const status = user.isActive === false ? 'deactivated' : getStatus(daysLeft);
                             return (
                               <motion.tr 
                                 layout
@@ -1124,21 +1256,26 @@ export default function App() {
                                 animate={{ opacity: 1 }}
                                 exit={{ opacity: 0 }}
                                 key={user.id} 
-                                className="group hover:bg-slate-50/50 transition-all duration-300 relative"
+                                className={`group hover:bg-slate-50/50 transition-all duration-300 relative ${user.isActive === false ? 'opacity-70 grayscale-[0.5]' : ''}`}
                               >
                                 <td className="px-8 py-6">
                                   <div className="flex items-center gap-3">
                                     <div className={`w-1.5 h-6 rounded-full ${
-                                      status === 'active' ? 'bg-emerald-500' : status === 'warning' ? 'bg-amber-500' : 'bg-bkash'
+                                      status === 'active' ? 'bg-emerald-500' : status === 'warning' ? 'bg-amber-500' : status === 'deactivated' ? 'bg-slate-400' : 'bg-bkash'
                                     }`} />
                                     <span className="text-[9px] font-black text-slate-300 tabular-nums">{(idx + 1).toString().padStart(2, '0')}</span>
                                   </div>
                                 </td>
                                 <td className="px-4 py-6">
                                   <div className="flex flex-col gap-1 max-w-[200px]">
-                                    <h4 className="font-extrabold text-slate-800 uppercase tracking-tight text-[9px] group-hover:text-bkash transition-colors truncate">
-                                      {user.name}
-                                    </h4>
+                                    <div className="flex items-center gap-2">
+                                      <h4 className="font-extrabold text-slate-800 uppercase tracking-tight text-[9px] group-hover:text-bkash transition-colors truncate">
+                                        {user.name}
+                                      </h4>
+                                      {!user.isActive && user.isActive !== undefined && (
+                                        <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-[6px] font-black uppercase tracking-tighter shrink-0">বন্ধ</span>
+                                      )}
+                                    </div>
                                     <div className="flex items-center gap-2 text-[8px] text-slate-400 font-bold">
                                       <MapPin className="w-3 h-3 shrink-0" />
                                       <span className="truncate">{user.address}</span>
@@ -1184,6 +1321,8 @@ export default function App() {
                                     <div className="flex gap-1.5">
                                       {[
                                         { icon: Eye, label: 'বিস্তারিত তথ্য', color: 'text-slate-400 hover:bg-slate-900 border-slate-100', onClick: () => { setViewingUser(user); setViewMode('details'); setShowViewModal(true); } },
+                                        { icon: ArrowUpCircle, label: 'টাকা উত্তোলন', color: 'text-blue-500 hover:bg-blue-500 border-blue-100', onClick: () => handleOpenWithdraw(user) },
+                                        { icon: user.isActive === false ? UserCheck : UserMinus, label: user.isActive === false ? 'অ্যাক্টিভেট' : 'ডিঅ্যাক্টিভেট', color: user.isActive === false ? 'text-emerald-600 hover:bg-emerald-600 border-emerald-100' : 'text-amber-600 hover:bg-amber-600 border-amber-100', onClick: () => toggleUserStatus(user) },
                                         { icon: HandCoins, label: 'টাকা সংগ্রহ', color: 'text-emerald-500 hover:bg-emerald-500 border-emerald-100', onClick: () => handleOpenCollection(user) },
                                         { icon: Edit, label: 'তথ্য সম্পাদন', color: 'text-amber-500 hover:bg-amber-500 border-amber-100', onClick: () => { setEditingUser(user); setShowAddEditModal(true); } },
                                         { icon: Trash2, label: 'ডিলিট করুন', color: 'text-rose-500 hover:bg-rose-50 border-rose-100', onClick: () => { setUserToDelete(user); setShowDeleteModal(true); } },
@@ -1251,10 +1390,12 @@ export default function App() {
               </p>
               
               <div className="grid grid-cols-2 gap-4">
-                <button 
+                <motion.button 
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
                   onClick={() => deleteUser(userToDelete.id)}
                   disabled={isProcessing}
-                  className="py-4 bg-rose-600 text-white rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] shadow-lg shadow-rose-100 hover:bg-rose-700 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="py-4 bg-rose-600 text-white rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] shadow-lg shadow-rose-100 hover:bg-rose-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isProcessing ? (
                     <>
@@ -1266,13 +1407,15 @@ export default function App() {
                       <Trash2 className="w-4 h-4" /> নিশ্চিত করুন
                     </>
                   )}
-                </button>
-                <button 
+                </motion.button>
+                <motion.button 
+                  whileHover={{ backgroundColor: "var(--color-slate-200)" }}
+                  whileTap={{ scale: 0.98 }}
                   onClick={() => setShowDeleteModal(false)}
-                  className="py-4 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] hover:bg-slate-200 active:scale-95 transition-all"
+                  className="py-4 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] transition-all"
                 >
                   বাতিল করুন
-                </button>
+                </motion.button>
               </div>
             </div>
           </Modal>
@@ -1319,26 +1462,34 @@ export default function App() {
                 <label className="text-[8px] font-bold text-slate-400 uppercase flex items-center gap-1.5"><Wallet className="w-3 h-3" /> পাওয়ার ব্যালেন্স (টাকা) *</label>
                 <input type="number" name="pwrBalance" required defaultValue={editingUser?.pwrBalance} placeholder="যেমন: 1000" className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-[8px] font-bold" />
               </div>
+              <div className="col-span-1 sm:col-span-2 space-y-1.5">
+                <label className="text-[8px] font-bold text-slate-400 uppercase flex items-center gap-1.5"><ScrollText className="w-3 h-3" /> চুক্তিনামা / শর্তাবলি</label>
+                <textarea name="terms" rows={3} defaultValue={editingUser?.terms} placeholder="চুক্তির বিশেষ শর্তাবলি লিখুন (প্রচ্ছদ রশিদ বা চুক্তিপত্রে প্রিন্ট হবে)..." className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all resize-none text-[8px] font-bold" />
+              </div>
               <div className="col-span-1 sm:col-span-2 flex flex-col sm:flex-row gap-4 mt-6">
-                <button 
+                <motion.button 
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
                   type="submit" 
                   disabled={isProcessing}
-                  className="flex-1 py-4 bg-bkash text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl shadow-bkash/20 hover:bg-bkash-dark active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="flex-1 py-4 bg-bkash text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl shadow-bkash/20 hover:bg-bkash-dark transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {isProcessing ? <ActionSpinner /> : (
                     <>
                       <Save className="w-4 h-4" /> {editingUser ? "পরিবর্তন সংরক্ষণ" : "নতুন ইউজার যোগ করুন"}
                     </>
                   )}
-                </button>
-                <button 
+                </motion.button>
+                <motion.button 
+                  whileHover={{ backgroundColor: "var(--color-slate-200)" }}
+                  whileTap={{ scale: 0.98 }}
                   type="button" 
                   disabled={isProcessing}
                   onClick={() => setShowAddEditModal(false)} 
-                  className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-slate-200 active:scale-95 transition-all disabled:opacity-50"
+                  className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all disabled:opacity-50"
                 >
                   বাতিল
-                </button>
+                </motion.button>
               </div>
             </form>
           </Modal>
@@ -1352,32 +1503,21 @@ export default function App() {
             isSuccess={isSuccess}
             isError={isError}
           >
-            <div className="flex bg-slate-100 p-1.5 rounded-2xl mb-6 no-print">
-              <button 
-                onClick={() => setViewMode('details')}
-                className={`flex-1 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                  viewMode === 'details' ? 'bg-white shadow-sm text-bkash' : 'text-slate-500'
-                }`}
-              >
-                বিস্তারিত তথ্য
-              </button>
-              <button 
-                onClick={() => setViewMode('card')}
-                className={`flex-1 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                  viewMode === 'card' ? 'bg-white shadow-sm text-bkash' : 'text-slate-500'
-                }`}
-              >
-                প্রিন্টেবল কার্ড
-              </button>
-              <button 
-                onClick={() => setViewMode('portfolio')}
-                className={`flex-1 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                  viewMode === 'portfolio' ? 'bg-white shadow-sm text-bkash' : 'text-slate-500'
-                }`}
-              >
-                পোর্টফোলিও
-              </button>
-            </div>
+              <div className="flex bg-slate-100 p-1.5 rounded-2xl mb-6 no-print">
+                {(['details', 'card', 'portfolio', 'receipt'] as const).map((mode) => (
+                  <motion.button 
+                    key={mode}
+                    whileHover={{ scale: 1.01 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setViewMode(mode)}
+                    className={`flex-1 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                      viewMode === mode ? 'bg-white shadow-sm text-bkash' : 'text-slate-500'
+                    }`}
+                  >
+                    {mode === 'details' ? 'বিস্তারিত তথ্য' : mode === 'card' ? 'প্রিন্টেবল কার্ড' : mode === 'portfolio' ? 'পোর্টফোলিও' : 'টাকা বৃদ্ধির রশিদ'}
+                  </motion.button>
+                ))}
+              </div>
 
             <div id="print-area" className="w-full max-w-full overflow-x-hidden p-1">
               {viewMode === 'details' ? (
@@ -1507,9 +1647,33 @@ export default function App() {
                          {getDaysLeft(viewingUser.expireDate) < 0 ? 'মেয়াদ উত্তীর্ণ' : 'যাচাইকৃত ইউজার'}
                        </div>
                     </div>
+
+                    {/* Withdrawal History in Details Mode */}
+                    {viewingUser.withdrawals && viewingUser.withdrawals.length > 0 && (
+                      <div className="mt-8 pt-6 border-t border-slate-100">
+                        <div className="flex items-center gap-2 mb-4">
+                          <History className="w-4 h-4 text-blue-500" />
+                          <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">টাকা উত্তোলনের ইতিহাস</h4>
+                        </div>
+                        <div className="space-y-3">
+                          {viewingUser.withdrawals.map((w, i) => (
+                            <div key={`withdraw-detail-${i}`} className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex justify-between items-center group hover:bg-blue-50 transition-colors">
+                              <div>
+                                <p className="text-[10px] font-black text-slate-800 tabular-nums">{toBn(formatDate(w.date))}</p>
+                                <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest truncate max-w-[150px]">{w.purpose}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-[10px] font-black text-blue-600">-{toBn(w.amount.toLocaleString())} ৳</p>
+                                <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">উত্তোলন</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
-              ) : (
+              ) : viewMode === 'portfolio' ? (
                 <div id="print-portfolio" className="bg-white min-h-[1100px] p-6 md:p-10 shadow-sm border border-slate-200 rounded-sm">
                   {/* Clean Formal Header */}
                   <div className="text-center mb-8 border-b-2 border-slate-900 pb-6">
@@ -1619,7 +1783,40 @@ export default function App() {
                       </div>
                     </section>
 
-                    {/* Section 5: Signatures */}
+                    {/* Section 5: Withdrawal Table */}
+                    {viewingUser.withdrawals && viewingUser.withdrawals.length > 0 && (
+                      <section>
+                        <div className="flex items-center gap-2 mb-3 pb-1 border-b border-slate-900">
+                          <span className="text-[9px] font-black">০৫.</span>
+                          <h3 className="text-[10px] font-black uppercase tracking-widest text-blue-600">উত্তোলনের তালিকা</h3>
+                        </div>
+                        
+                        <div className="px-1 overflow-x-auto">
+                          <table className="w-full text-left border border-slate-200 table-fixed">
+                            <thead>
+                              <tr className="bg-blue-600 text-white">
+                                <th className="w-10 px-2 py-1.5 text-[8px] font-black uppercase border-r border-blue-400 text-center">নং</th>
+                                <th className="px-2 py-1.5 text-[8px] font-black uppercase border-r border-blue-400">তারিখ</th>
+                                <th className="px-2 py-1.5 text-[8px] font-black uppercase border-r border-blue-400 text-right">পরিমাণ</th>
+                                <th className="px-2 py-1.5 text-[8px] font-black uppercase">উদ্দেশ্য</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {viewingUser.withdrawals.map((w, i) => (
+                                <tr key={`withdraw-port-${i}-${w.date}`} className="border-b border-slate-100">
+                                  <td className="px-2 py-1.5 text-[9px] font-bold text-slate-400 text-center border-r border-slate-50">{toBn(i + 1)}</td>
+                                  <td className="px-2 py-1.5 text-[9px] font-bold text-slate-700 border-r border-slate-50">{toBn(formatDate(w.date))}</td>
+                                  <td className="px-2 py-1.5 text-[9px] font-black text-blue-600 text-right border-r border-slate-50">{toBn(w.amount.toLocaleString())}</td>
+                                  <td className="px-2 py-1.5 text-[9px] font-bold text-slate-600 truncate">{w.purpose}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </section>
+                    )}
+
+                    {/* Section 6: Signatures */}
                     <div className="mt-16 flex justify-between px-6">
                       <div className="text-center w-32">
                         <div className="border-b border-slate-300 mb-1"></div>
@@ -1632,28 +1829,130 @@ export default function App() {
                     </div>
                   </div>
                 </div>
+              ) : (
+                <div id="print-receipt" className="bg-white p-6 md:p-10 shadow-sm border border-slate-200 rounded-sm min-h-[600px] flex flex-col">
+                  {/* Receipt Header */}
+                  <div className="flex justify-between items-start border-b-2 border-slate-900 pb-6 mb-8">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 md:w-12 md:h-12 bg-bkash flex items-center justify-center text-white rounded-xl">
+                        <Landmark className="w-6 h-6 md:w-7 md:h-7" />
+                      </div>
+                      <div>
+                        <h2 className="text-md md:text-xl font-black text-slate-900 uppercase">LandManager Pro</h2>
+                        <p className="text-[7px] md:text-[8px] font-bold text-slate-400 uppercase tracking-widest">টাকা সংগ্রহের অফিশিয়াল রশিদ</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[8px] md:text-[10px] font-black text-slate-900">ভাউচার নং: {toBn(viewingUser.id.slice(-6).toUpperCase())}</p>
+                      <p className="text-[7px] md:text-[8px] font-bold text-slate-400 uppercase tracking-widest">তারিখ: {toBn(formatDate(new Date().toISOString()))}</p>
+                    </div>
+                  </div>
+
+                  {/* Receipt Body */}
+                  <div className="space-y-6 flex-1">
+                    <div className="grid grid-cols-2 gap-4 md:gap-8">
+                      <div>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">গ্রাহকের তথ্য</p>
+                        <h3 className="text-[10px] md:text-md font-black text-slate-900">{viewingUser.name}</h3>
+                        <p className="text-[8px] md:text-[9px] font-bold text-slate-600">{viewingUser.address}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">চুক্তিধারী</p>
+                        <h3 className="text-[10px] md:text-md font-black text-slate-900">{viewingUser.chukirdharirName}</h3>
+                        <p className="text-[8px] md:text-[9px] font-bold text-slate-600">{toBn(viewingUser.mobile)}</p>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-50 border border-slate-100 p-4 md:p-6 rounded-2xl">
+                      <h4 className="text-[9px] md:text-[10px] font-black text-slate-900 uppercase tracking-widest mb-4 pb-2 border-b border-slate-200">আর্থিক হিসাব (টাকা বৃদ্ধি)</h4>
+                      
+                      {(() => {
+                        const lastHistory = viewingUser.history && viewingUser.history.length > 0 
+                          ? viewingUser.history[viewingUser.history.length - 1] 
+                          : null;
+                        
+                        const addedAmount = lastHistory ? lastHistory.amount : 0;
+                        const previousAmount = viewingUser.amount - addedAmount;
+                        
+                        return (
+                          <div className="space-y-3">
+                            <div className="flex justify-between items-center text-[10px] md:text-[11px]">
+                              <span className="font-bold text-slate-500 uppercase">পূর্বে চুক্তিবদ্ধ টাকা:</span>
+                              <span className="font-black text-slate-900">{toBn(previousAmount.toLocaleString())} ৳</span>
+                            </div>
+                            <div className="flex justify-between items-center text-[10px] md:text-[11px] py-3 border-y border-dashed border-slate-200">
+                              <span className="font-bold text-emerald-600 uppercase">বর্তমানে বৃদ্ধিকৃত টাকা:</span>
+                              <span className="font-black text-emerald-600">+ {toBn(addedAmount.toLocaleString())} ৳</span>
+                            </div>
+                            <div className="flex justify-between items-center text-[11px] md:text-[12px] pt-2">
+                              <span className="font-black text-slate-900 uppercase">সর্বমোট চুক্তির টাকা:</span>
+                              <span className="font-black text-bkash underline underline-offset-4 decoration-2">{toBn(viewingUser.amount.toLocaleString())} ৳</span>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+
+                    {viewingUser.terms && (
+                      <div className="mt-6">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 border-b border-slate-100 pb-1">বিশেষ শর্তাবলি</p>
+                        <div className="text-[8px] md:text-[9px] font-bold text-slate-600 leading-relaxed italic bg-blue-50/30 p-4 rounded-xl border border-blue-100/50">
+                          {viewingUser.terms}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {!viewingUser.terms && (
+                      <div className="mt-6">
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2 border-b border-slate-100 pb-1">সার্বজনীন শর্তাবলি</p>
+                        <ul className="text-[7px] md:text-[8px] font-bold text-slate-500 space-y-1.5 list-disc pl-4">
+                          <li>উক্ত টাকা সংগ্রহের পর চুক্তির মেয়াদ বৃদ্ধি করা হইয়াছে।</li>
+                          <li>চুক্তি অনুযায়ী নির্ধারিত সময়ের মধ্যে পাহাড়তলী মেইনটেন্যান্স কাজ সম্পন্ন করা হইবে।</li>
+                          <li>কর্তৃপক্ষ চাহিবামাত্র ইউজার তাহার প্রয়োজনীয় দলিলপত্র প্রদর্শন করিতে বাধ্য থাকিবেন।</li>
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-16 md:mt-20 flex justify-between px-6 pt-10 border-t border-slate-100 signature-footer">
+                    <div className="text-center w-32 md:w-36">
+                      <div className="border-b border-slate-900 mb-2"></div>
+                      <p className="text-[7px] md:text-[8px] font-black text-slate-700 uppercase tracking-widest">ইউজার স্বাক্ষর</p>
+                    </div>
+                    <div className="text-center w-32 md:w-36">
+                      <div className="border-b border-slate-900 mb-2"></div>
+                      <p className="text-[7px] md:text-[8px] font-black text-slate-700 uppercase tracking-widest">কর্তৃপক্ষ সিল ও স্বাক্ষর</p>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3 mt-10 no-print">
-              <button 
+              <motion.button 
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
                 onClick={handlePrint}
-                className="flex-1 py-4.5 bg-bkash text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-bkash/30 flex items-center justify-center gap-2 hover:bg-bkash-dark active:scale-95 transition-all"
+                className="flex-1 py-4.5 bg-bkash text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-bkash/30 flex items-center justify-center gap-2 hover:bg-bkash-dark transition-all"
               >
                 <Printer className="w-4 h-4" /> {viewMode === 'card' ? 'প্রিন্ট' : viewMode === 'portfolio' ? 'প্রিন্ট' : 'প্রিন্ট'}
-              </button>
-              <button 
+              </motion.button>
+              <motion.button 
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
                 onClick={handleDownloadPDF}
-                className="flex-1 py-4.5 bg-emerald-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-emerald-900/20 flex items-center justify-center gap-2 hover:bg-emerald-700 active:scale-95 transition-all"
+                className="flex-1 py-4.5 bg-emerald-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-emerald-900/20 flex items-center justify-center gap-2 hover:bg-emerald-700 transition-all"
               >
                 <Download className="w-4 h-4" /> পিডিওএফ ডাউনলোড
-              </button>
-              <button 
+              </motion.button>
+              <motion.button 
+                whileHover={{ backgroundColor: "var(--color-slate-200)" }}
+                whileTap={{ scale: 0.98 }}
                 onClick={() => setShowViewModal(false)} 
-                className="flex-1 py-4.5 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-200 active:scale-95 transition-all"
+                className="flex-1 py-4.5 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all"
               >
                 বন্ধ
-              </button>
+              </motion.button>
             </div>
           </Modal>
         )}
@@ -1742,6 +2041,16 @@ export default function App() {
                 />
               </div>
 
+              <div className="space-y-2 text-center sm:text-left">
+                <label className="text-[8px] font-black text-slate-500 uppercase flex items-center justify-center sm:justify-start gap-2 tracking-widest"><FileText className="w-4 h-4 text-slate-400" /> বিশেষ শর্তাবলি (যদি থাকে)</label>
+                <textarea 
+                  value={collectionTerms}
+                  onChange={(e) => setCollectionTerms(e.target.value)}
+                  placeholder="এই কিস্তির জন্য কোনো বিশেষ শর্ত থাকলে তা লিখুন..." 
+                  className="w-full px-6 py-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-[10px] font-bold text-slate-700 min-h-[80px] resize-none" 
+                />
+              </div>
+
               {/* Summary / Preview */}
               {extendMonths && collectionAmount && !isNaN(parseInt(extendMonths)) && !isNaN(parseFloat(collectionAmount)) && (
                 <motion.div 
@@ -1772,10 +2081,12 @@ export default function App() {
               )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
-                <button 
+                <motion.button 
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
                   onClick={processCollection}
                   disabled={isProcessing}
-                  className="py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] shadow-lg shadow-emerald-100 hover:bg-emerald-700 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {isProcessing ? (
                     <>
@@ -1787,14 +2098,16 @@ export default function App() {
                       <CheckCircle2 className="w-4 h-4" /> সংগ্রহ সম্পন্ন করুন
                     </>
                   )}
-                </button>
-                <button 
+                </motion.button>
+                <motion.button 
+                  whileHover={{ backgroundColor: "var(--color-slate-200)" }}
+                  whileTap={{ scale: 0.98 }}
                   onClick={() => setShowCollectionModal(false)}
                   disabled={isProcessing}
-                  className="py-4 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] hover:bg-slate-200 active:scale-95 transition-all disabled:opacity-50"
+                  className="py-4 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] transition-all disabled:opacity-50"
                 >
                   বাতিল করুন
-                </button>
+                </motion.button>
               </div>
 
               {/* Improved Collection History Section */}
@@ -1861,6 +2174,92 @@ export default function App() {
                     </div>
                   )}
                 </div>
+              </div>
+            </div>
+          </Modal>
+        )}
+
+        {showWithdrawModal && withdrawingUser && (
+          <Modal 
+            title="টাকা উত্তোলন করুন" 
+            onClose={() => setShowWithdrawModal(false)}
+            isLoading={isProcessing}
+            isSuccess={isSuccess}
+            isError={isError}
+          >
+            <div className="bg-slate-50 rounded-3xl p-6 mb-6 border border-slate-100">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-100">
+                  <ArrowUpCircle className="w-7 h-7" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-md font-black text-slate-800 uppercase tracking-tight truncate">{withdrawingUser.name}</h3>
+                  <div className="flex flex-wrap gap-x-4 gap-y-2 mt-2">
+                    <p className="text-[8px] font-black text-bkash uppercase tracking-widest flex items-center gap-1.5">
+                      <Phone className="w-3 h-3" /> {withdrawingUser.mobile}
+                    </p>
+                    <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                      <Banknote className="w-3 h-3 text-bkash" /> বর্তমান ব্যালেন্স: {toBn(withdrawingUser.pwrBalance.toLocaleString())} ৳
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <label className="text-[8px] font-black text-slate-500 uppercase flex items-center gap-2 tracking-widest">
+                  <Banknote className="w-4 h-4 text-blue-500" /> উত্তোলনের পরিমাণ (টাকা) *
+                </label>
+                <input 
+                  type="number" 
+                  value={withdrawAmount}
+                  onChange={(e) => setWithdrawAmount(e.target.value)}
+                  placeholder="টাকার পরিমাণ লিখুন" 
+                  className="w-full px-6 py-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-600/10 outline-none transition-all text-md font-black text-blue-600" 
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[8px] font-black text-slate-500 uppercase flex items-center gap-2 tracking-widest">
+                  <FileText className="w-4 h-4 text-slate-400" /> উত্তোলনের কারণ / উদ্দেশ্য *
+                </label>
+                <textarea 
+                  value={withdrawPurpose}
+                  onChange={(e) => setWithdrawPurpose(e.target.value)}
+                  placeholder="কেন টাকা উত্তোলন করা হচ্ছে তা লিখুন..." 
+                  className="w-full px-6 py-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-600/10 outline-none transition-all text-[10px] font-bold text-slate-700 min-h-[100px] resize-none" 
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
+                <motion.button 
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={processWithdrawal}
+                  disabled={isProcessing}
+                  className="py-4 bg-blue-600 text-white rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isProcessing ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      প্রসেসিং...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" /> উত্তোলন সম্পন্ন করুন
+                    </>
+                  )}
+                </motion.button>
+                <motion.button 
+                  whileHover={{ backgroundColor: "var(--color-slate-200)" }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setShowWithdrawModal(false)}
+                  disabled={isProcessing}
+                  className="py-4 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] transition-all disabled:opacity-50"
+                >
+                  বাতিল করুন
+                </motion.button>
               </div>
             </div>
           </Modal>
@@ -1954,7 +2353,9 @@ export default function App() {
                     </div>
 
                     <div className="pt-6 border-t border-slate-100 flex gap-4">
-                      <button
+                      <motion.button
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
                         onClick={async () => {
                           setIsProcessing(true);
                           // Artificial delay for user request
@@ -1966,10 +2367,10 @@ export default function App() {
                           setIsProcessing(false);
                           setShowReportsModal(false);
                         }}
-                        className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] shadow-xl shadow-slate-200 hover:bg-slate-800 active:scale-95 transition-all flex items-center justify-center gap-2"
+                        className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] shadow-xl shadow-slate-200 hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
                       >
                         <FileDown className="w-4 h-4" /> CSV এক্সপোর্ট করুন
-                      </button>
+                      </motion.button>
                     </div>
                   </>
                 );
@@ -1982,7 +2383,9 @@ export default function App() {
       {/* Mobile Floating Action Button */}
       <div className="fixed bottom-8 right-6 z-30 md:hidden">
         <motion.button
-          whileHover={{ scale: 1.1 }}
+          initial={{ scale: 0, rotate: -180 }}
+          animate={{ scale: 1, rotate: 0 }}
+          whileHover={{ scale: 1.1, rotate: 90 }}
           whileTap={{ scale: 0.9 }}
           onClick={() => { setEditingUser(null); setShowAddEditModal(true); }}
           aria-label="নতুন এন্ট্রি যোগ করুন"

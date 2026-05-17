@@ -11,12 +11,16 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
     }
 
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
+    function isAdmin() {
+      return isVerified() && request.auth.token.email == 'sflove087@gmail.com';
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
     // Users collection
@@ -27,21 +31,26 @@ service cloud.firestore {
                data.address is string && data.address.size() <= 500 &&
                data.mobile is string && data.mobile.size() <= 20 &&
                data.jomirPoriman is string && data.jomirPoriman.size() <= 100 &&
-               data.amount is number && data.amount >= 0 &&
-               data.expireDate is string && data.expireDate.size() <= 20 &&
+               data.amount is number &&
+               data.expireDate is string && data.expireDate.size() <= 64 &&
                data.pwrBalance is number &&
-               data.chukirdharirName is string && data.chukirdharirName.size() <= 200;
-      }
-
-      function isVerified() {
-        return isSignedIn() && request.auth.token.email_verified == true;
+               data.chukirdharirName is string && data.chukirdharirName.size() <= 200 &&
+               (!data.keys().contains('isActive') || data.isActive is bool) &&
+               (!data.keys().contains('withdrawals') || data.withdrawals is list);
       }
 
       allow read: if isVerified();
       allow create: if isVerified() && isValidUser(request.resource.data);
       allow update: if isVerified() && (
         // Action: Edit Profile
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'address', 'mobile', 'jomirPoriman', 'amount', 'expireDate', 'pwrBalance', 'chukirdharirName']) && isValidUser(request.resource.data)) ||
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'address', 'mobile', 'jomirPoriman', 'amount', 'expireDate', 'pwrBalance', 'chukirdharirName', 'isActive', 'withdrawals']) && isValidUser(request.resource.data)) ||
+        // Action: Toggle Status (isActive)
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isActive']) &&
+         request.resource.data.isActive is bool) ||
+        // Action: Withdrawal (amount and withdrawals list change)
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['amount', 'withdrawals']) &&
+         request.resource.data.amount is number &&
+         request.resource.data.withdrawals is list) ||
         // Action: Collect / Extend
         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['expireDate', 'pwrBalance', 'history']) && 
          request.resource.data.expireDate is string &&
@@ -50,7 +59,6 @@ service cloud.firestore {
       );
       allow delete: if isVerified();
 
-      // Legacy history subcollection rule (kept for safety if we migrate later)
       match /history/{historyId} {
         allow read, write: if isVerified();
       }

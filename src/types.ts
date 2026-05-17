@@ -5,6 +5,12 @@ export interface CollectionHistory {
   newExpiryDate: string;
 }
 
+export interface WithdrawalHistory {
+  date: string;
+  amount: number;
+  purpose?: string;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -15,10 +21,13 @@ export interface User {
   expireDate: string; // ISO format (YYYY-MM-DD)
   pwrBalance: number;
   chukirdharirName: string;
+  terms?: string;
   history?: CollectionHistory[];
+  withdrawals?: WithdrawalHistory[];
+  isActive: boolean;
 }
 
-export type StatusFilter = 'all' | 'active' | 'warning' | 'expired';
+export type StatusFilter = 'all' | 'active' | 'warning' | 'expired' | 'deactivated';
 
 export interface SortConfig {
   field: keyof User;
@@ -35,7 +44,9 @@ export const INITIAL_USERS: User[] = [
     amount: 50000, 
     expireDate: "2025-12-31", 
     pwrBalance: 12000, 
-    chukirdharirName: "মোঃ শাহিন" 
+    chukirdharirName: "মোঃ শাহিন",
+    isActive: true,
+    withdrawals: []
   },
   { 
     id: "2", 
@@ -46,7 +57,9 @@ export const INITIAL_USERS: User[] = [
     amount: 75000, 
     expireDate: "2024-12-15", 
     pwrBalance: 5000, 
-    chukirdharirName: "মোঃ হাসান" 
+    chukirdharirName: "মোঃ হাসান",
+    isActive: true,
+    withdrawals: []
   },
   { 
     id: "3", 
@@ -57,6 +70,8 @@ export const INITIAL_USERS: User[] = [
     amount: 120000, 
     expireDate: "2024-05-20", 
     pwrBalance: 2500, 
-    chukirdharirName: "মোঃ নিজাম" 
+    chukirdharirName: "মোঃ নিজাম",
+    isActive: false,
+    withdrawals: []
   }
 ];

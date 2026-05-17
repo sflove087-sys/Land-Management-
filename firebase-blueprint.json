@@ -13,6 +13,8 @@
         "expireDate": { "type": "string", "description": "Expiry date in ISO format" },
         "pwrBalance": { "type": "number", "description": "Current balance" },
         "chukirdharirName": { "type": "string", "description": "Contractor name" },
+        "isActive": { "type": "boolean", "description": "Account status" },
+        "withdrawals": { "type": "array", "$ref": "WithdrawalHistory" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
@@ -29,6 +31,17 @@
         "newExpiryDate": { "type": "string" }
       },
       "required": ["date", "amount", "monthsExtended", "newExpiryDate"]
+    },
+    "WithdrawalHistory": {
+      "title": "Withdrawal History",
+      "description": "History of withdrawals for a user",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string", "format": "date-time" },
+        "amount": { "type": "number" },
+        "purpose": { "type": "string" }
+      },
+      "required": ["date", "amount"]
     }
   },
   "firestore": {
