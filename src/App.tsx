@@ -8,7 +8,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { 
   LayoutDashboard, 
   Users, 
@@ -52,7 +52,14 @@ import {
   Download,
   UserMinus,
   ArrowUpCircle,
-  Ban
+  ArrowDownCircle,
+  Ban,
+  Volume2,
+  VolumeX,
+  Music,
+  Bell,
+  BellRing,
+  Volume1
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toPng } from 'html-to-image';
@@ -317,10 +324,89 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
   throw new Error(JSON.stringify(errInfo));
 }
 
+// Sound URLs
+const SOUNDS = {
+  success: 'https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3',
+  click: 'https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3',
+  pop: 'https://assets.mixkit.co/active_storage/sfx/2017/2017-preview.mp3',
+  error: 'https://assets.mixkit.co/active_storage/sfx/2004/2004-preview.mp3',
+  ambient: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3'
+};
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [users, setUsers] = useState<User[]>([]);
+  
+  // Audio State
+  const [isMuted, setIsMuted] = useState(false);
+  const [isMusicPlaying, setIsMusicPlaying] = useState(false);
+  const bgMusicRef = useRef<HTMLAudioElement | null>(null);
+
+  // Notification State
+  const [notifications, setNotifications] = useState<{id: string, title: string, message: string, date: string, type: 'warning' | 'alert'}[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  const playSound = useCallback((type: keyof typeof SOUNDS) => {
+    if (isMuted) return;
+    const audio = new Audio(SOUNDS[type]);
+    audio.volume = 0.5;
+    audio.play().catch(() => {});
+  }, [isMuted]);
+
+  useEffect(() => {
+    if (isMusicPlaying && !isMuted) {
+      if (!bgMusicRef.current) {
+        bgMusicRef.current = new Audio(SOUNDS.ambient);
+        bgMusicRef.current.loop = true;
+        bgMusicRef.current.volume = 0.2;
+      }
+      bgMusicRef.current.play().catch(() => {});
+    } else {
+      if (bgMusicRef.current) {
+        bgMusicRef.current.pause();
+      }
+    }
+    return () => {
+      if (bgMusicRef.current) {
+        bgMusicRef.current.pause();
+      }
+    };
+  }, [isMusicPlaying, isMuted]);
+
+  // Reminder Logic
+  useEffect(() => {
+    if (users.length > 0) {
+      const reminders: any[] = [];
+      const today = new Date();
+      const inSevenDays = new Date();
+      inSevenDays.setDate(today.getDate() + 7);
+
+      users.forEach(user => {
+        if (!user.isActive) return;
+        const expiry = new Date(user.expireDate);
+        if (expiry < today) {
+          reminders.push({
+            id: `exp-over-${user.id}`,
+            title: 'চুক্তির মেয়াদ শেষ!',
+            message: `${user.name} এর চুক্তির মেয়াদ ইতিমধ্যে শেষ হয়ে গিয়েছে।`,
+            date: user.expireDate,
+            type: 'alert'
+          });
+        } else if (expiry <= inSevenDays) {
+          reminders.push({
+            id: `exp-soon-${user.id}`,
+            title: 'মেয়াদ শেষ হতে চলেছে',
+            message: `${user.name} এর চুক্তির মেয়াদ আগামী ৭ দিনের মধ্যে শেষ হবে।`,
+            date: user.expireDate,
+            type: 'warning'
+          });
+        }
+      });
+      setNotifications(reminders);
+    }
+  }, [users]);
+
   const [filter, setFilter] = useState<StatusFilter>('all');
   const [sortConfig, setSortConfig] = useState<SortConfig[]>([]);
   const [search, setSearch] = useState('');
@@ -352,6 +438,7 @@ export default function App() {
   const [showReportsModal, setShowReportsModal] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [withdrawingUser, setWithdrawingUser] = useState<User | null>(null);
+  const [withdrawMode, setWithdrawMode] = useState<'withdraw' | 'add'>('withdraw');
   const [withdrawAmount, setWithdrawAmount] = useState<string>('');
   const [withdrawPurpose, setWithdrawPurpose] = useState<string>('');
   const [reportRange, setReportRange] = useState({ 
@@ -527,6 +614,7 @@ export default function App() {
       } else {
         await addDoc(collection(db, 'users'), userData);
       }
+      playSound('success');
       setIsSuccess(true);
       await new Promise(resolve => setTimeout(resolve, 2000));
       setIsSuccess(false);
@@ -598,7 +686,7 @@ export default function App() {
         terms: collectionTerms,
         history: updatedHistory
       });
-      
+      playSound('success');
       setIsSuccess(true);
       await new Promise(resolve => setTimeout(resolve, 2000));
       setIsSuccess(false);
@@ -618,6 +706,7 @@ export default function App() {
   };
 
   const handleOpenCollection = (user: User) => {
+    playSound('click');
     if (user.isActive === false) {
       alert("ডিঅ্যাক্টিভেটেড একাউন্টে টাকা সংগ্রহ করা সম্ভব নয়। আগে একাউন্টটি অ্যাক্টিভেট করুন।");
       return;
@@ -651,20 +740,24 @@ export default function App() {
   };
 
   const handleOpenWithdraw = (user: User) => {
+    playSound('click');
     setWithdrawingUser(user);
+    setWithdrawMode('withdraw');
+    setWithdrawAmount('');
+    setWithdrawPurpose('');
     setShowWithdrawModal(true);
   };
 
   const processWithdrawal = async () => {
     if (!withdrawingUser || !withdrawAmount) return;
-    const amountToWithdraw = parseFloat(withdrawAmount);
+    const amountToProcess = parseFloat(withdrawAmount);
     
-    if (isNaN(amountToWithdraw) || amountToWithdraw <= 0) {
+    if (isNaN(amountToProcess) || amountToProcess <= 0) {
       alert("অনুগ্রহ করে সঠিক টাকার পরিমাণ লিখুন");
       return;
     }
 
-    if (amountToWithdraw > withdrawingUser.amount) {
+    if (withdrawMode === 'withdraw' && amountToProcess > withdrawingUser.amount) {
       alert("চুক্তির পরিমাণের চেয়ে বেশি টাকা উত্তোলন সম্ভব নয়!");
       return;
     }
@@ -673,19 +766,35 @@ export default function App() {
     // Artificial delay
     await new Promise(resolve => setTimeout(resolve, 1000));
 
-    const newWithdrawal = {
-      date: new Date().toISOString(),
-      amount: amountToWithdraw,
-      purpose: withdrawPurpose || 'চুক্তি ভিত্তিক উত্তোলন'
-    };
-
     try {
-      const updatedWithdrawals = [...(withdrawingUser.withdrawals || []), newWithdrawal];
-      await updateDoc(doc(db, 'users', withdrawingUser.id), {
-        amount: withdrawingUser.amount - amountToWithdraw,
-        withdrawals: updatedWithdrawals
-      });
-
+      if (withdrawMode === 'withdraw') {
+        const newWithdrawal = {
+          date: new Date().toISOString(),
+          amount: amountToProcess,
+          purpose: withdrawPurpose || 'চুক্তি ভিত্তিক উত্তোলন'
+        };
+        const updatedWithdrawals = [...(withdrawingUser.withdrawals || []), newWithdrawal];
+        await updateDoc(doc(db, 'users', withdrawingUser.id), {
+          amount: withdrawingUser.amount - amountToProcess,
+          withdrawals: updatedWithdrawals
+        });
+      } else {
+        // Add mode: Increase the amount
+        const newHistoryEntry = {
+          date: new Date().toISOString(),
+          amount: amountToProcess,
+          monthsExtended: 0,
+          newExpiryDate: withdrawingUser.expireDate,
+          purpose: withdrawPurpose || 'সরাসরি টাকা বৃদ্ধি'
+        };
+        // Reuse CollectionHistory structure but we'll add it to history or just update amount
+        const updatedHistory = [...(withdrawingUser.history || []), newHistoryEntry] as any;
+        await updateDoc(doc(db, 'users', withdrawingUser.id), {
+          amount: withdrawingUser.amount + amountToProcess,
+          history: updatedHistory
+        });
+      }
+      playSound('success');
       setIsSuccess(true);
       await new Promise(resolve => setTimeout(resolve, 2000));
       setIsSuccess(false);
@@ -694,7 +803,7 @@ export default function App() {
       setWithdrawingUser(null);
       setWithdrawAmount('');
       setWithdrawPurpose('');
-      alert(`✅ টাকা উত্তোলন সম্পন্ন!\n\nপরিমাণ: ${toBn(amountToWithdraw.toLocaleString())} টাকা`);
+      alert(`✅ টাকা ${withdrawMode === 'withdraw' ? 'উত্তোলন' : 'যোগ'} সম্পন্ন!\n\nপরিমাণ: ${toBn(amountToProcess.toLocaleString())} টাকা`);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `users/${withdrawingUser.id}`);
       setIsError(true);
@@ -892,7 +1001,10 @@ export default function App() {
               key={item.id}
               whileHover={{ x: 5, backgroundColor: "var(--color-slate-50)" }}
               whileTap={{ scale: 0.98 }}
-              onClick={() => setFilter(item.id as StatusFilter)}
+              onClick={() => {
+                setFilter(item.id as StatusFilter);
+                playSound('click');
+              }}
               aria-current={filter === item.id ? 'page' : undefined}
               className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all font-bold ${
                 filter === item.id 
@@ -908,7 +1020,10 @@ export default function App() {
           <motion.button
             whileHover={{ x: 5, backgroundColor: "var(--color-slate-50)" }}
             whileTap={{ scale: 0.98 }}
-            onClick={() => setShowReportsModal(true)}
+            onClick={() => {
+              setShowReportsModal(true);
+              playSound('pop');
+            }}
             className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all font-bold text-slate-400 hover:text-slate-800"
           >
             <FileBarChart className="w-5 h-5 text-bkash transition-transform group-hover:scale-110" />
@@ -945,31 +1060,103 @@ export default function App() {
               </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2 md:hidden">
-                <motion.button 
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={handleLogout}
-                  aria-label="লগআউট করুন"
-                  className="p-3 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center transition-all border border-rose-100"
-                >
-                  <LogOut className="w-5 h-5" />
-                </motion.button>
-                <motion.button 
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={() => { setEditingUser(null); setShowAddEditModal(true); }}
-                  aria-label="নতুন এন্ট্রি যোগ করুন"
-                  className="p-3 bg-bkash text-white rounded-xl shadow-lg shadow-bkash/20 flex items-center justify-center transition-all"
-                >
-                  <Plus className="w-5 h-5" />
-                </motion.button>
+              <div className="flex items-center gap-2">
+                {/* Audio Controls */}
+                <div className="hidden sm:flex items-center gap-1 bg-white p-1 rounded-2xl border border-slate-100 shadow-sm">
+                  <motion.button 
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => {
+                      setIsMuted(!isMuted);
+                      playSound('click');
+                    }}
+                    className={`p-2 rounded-xl transition-all ${isMuted ? 'text-rose-500 bg-rose-50' : 'text-slate-400 hover:text-bkash hover:bg-bkash-light'}`}
+                    title={isMuted ? 'উনমিউট' : 'মিউট'}
+                  >
+                    {isMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+                  </motion.button>
+                  
+                  <motion.button 
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => {
+                      setIsMusicPlaying(!isMusicPlaying);
+                      playSound('click');
+                    }}
+                    className={`p-2 rounded-xl transition-all ${isMusicPlaying ? 'text-emerald-500 bg-emerald-50' : 'text-slate-400 hover:text-bkash hover:bg-bkash-light'}`}
+                    title={isMusicPlaying ? 'গান বন্ধ করুন' : 'গান শুনুন'}
+                  >
+                    <Music size={14} className={isMusicPlaying ? 'animate-pulse' : ''} />
+                  </motion.button>
+                </div>
+
+                {/* Notification Bell */}
+                <div className="relative">
+                  <motion.button 
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => {
+                      setShowNotifications(!showNotifications);
+                      playSound('pop');
+                    }}
+                    className={`p-3 rounded-xl transition-all shadow-sm border border-slate-100 relative ${showNotifications ? 'bg-bkash text-white' : 'bg-white text-slate-400 hover:text-bkash'}`}
+                  >
+                    {notifications.length > 0 ? <BellRing size={16} className={notifications.length > 0 ? "animate-bounce" : ""} /> : <Bell size={16} />}
+                    {notifications.length > 0 && (
+                      <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 border border-white rounded-full"></span>
+                    )}
+                  </motion.button>
+
+                  <AnimatePresence>
+                    {showNotifications && (
+                      <motion.div 
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                        className="absolute right-0 mt-3 w-72 bg-white rounded-3xl shadow-2xl shadow-slate-200 border border-slate-100 z-[2000] overflow-hidden"
+                      >
+                        <div className="p-4 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
+                          <h3 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">রিমাইন্ডার</h3>
+                          <span className="px-1.5 py-0.5 bg-bkash text-white rounded-full text-[7px] font-black">{notifications.length}</span>
+                        </div>
+                        <div className="max-h-[300px] overflow-y-auto p-2 space-y-2 custom-scrollbar">
+                          {notifications.length === 0 ? (
+                            <div className="py-8 text-center text-slate-400 text-[8px] font-bold uppercase tracking-widest">কোনো নতুন নোটিফিকেশন নেই</div>
+                          ) : (
+                            notifications.map((notif, idx) => (
+                              <motion.div 
+                                initial={{ opacity: 0, x: 5 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: idx * 0.05 }}
+                                key={notif.id}
+                                className={`p-4 rounded-2xl border flex gap-3 transition-all ${
+                                  notif.type === 'alert' ? 'bg-rose-50 border-rose-100' : 'bg-amber-50 border-amber-100'
+                                }`}
+                              >
+                                <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                                  notif.type === 'alert' ? 'bg-rose-500 text-white' : 'bg-amber-500 text-white'
+                                }`}>
+                                  {notif.type === 'alert' ? <AlertTriangle size={12} /> : <Clock size={12} />}
+                                </div>
+                                <div className="min-w-0">
+                                  <h4 className="text-[9px] font-black text-slate-800 uppercase truncate">{notif.title}</h4>
+                                  <p className="text-[8px] font-bold text-slate-600 leading-tight">{notif.message}</p>
+                                </div>
+                              </motion.div>
+                            ))
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
             </div>
             <motion.button 
               whileHover={{ scale: 1.02, y: -2 }}
               whileTap={{ scale: 0.98 }}
-              onClick={() => { setEditingUser(null); setShowAddEditModal(true); }}
+              onClick={() => { 
+                setEditingUser(null); 
+                setShowAddEditModal(true);
+                playSound('pop');
+              }}
               className="hidden md:flex px-6 py-3.5 bg-bkash text-white rounded-2xl font-black shadow-lg shadow-bkash/20 hover:bg-bkash-dark transition-all items-center gap-2 text-[10px] uppercase tracking-widest"
             >
               <Plus className="w-4 h-4" />
@@ -1323,7 +1510,7 @@ export default function App() {
                                         { icon: Eye, label: 'বিস্তারিত তথ্য', color: 'text-slate-400 hover:bg-slate-900 border-slate-100', onClick: () => { setViewingUser(user); setViewMode('details'); setShowViewModal(true); } },
                                         { icon: ArrowUpCircle, label: 'টাকা উত্তোলন', color: 'text-blue-500 hover:bg-blue-500 border-blue-100', onClick: () => handleOpenWithdraw(user) },
                                         { icon: user.isActive === false ? UserCheck : UserMinus, label: user.isActive === false ? 'অ্যাক্টিভেট' : 'ডিঅ্যাক্টিভেট', color: user.isActive === false ? 'text-emerald-600 hover:bg-emerald-600 border-emerald-100' : 'text-amber-600 hover:bg-amber-600 border-amber-100', onClick: () => toggleUserStatus(user) },
-                                        { icon: HandCoins, label: 'টাকা সংগ্রহ', color: 'text-emerald-500 hover:bg-emerald-500 border-emerald-100', onClick: () => handleOpenCollection(user) },
+                                        { icon: TrendingUp, label: 'টাকা বাড়ানো / সংগ্রহ', color: 'text-emerald-500 hover:bg-emerald-500 border-emerald-100', onClick: () => handleOpenCollection(user) },
                                         { icon: Edit, label: 'তথ্য সম্পাদন', color: 'text-amber-500 hover:bg-amber-500 border-amber-100', onClick: () => { setEditingUser(user); setShowAddEditModal(true); } },
                                         { icon: Trash2, label: 'ডিলিট করুন', color: 'text-rose-500 hover:bg-rose-50 border-rose-100', onClick: () => { setUserToDelete(user); setShowDeleteModal(true); } },
                                       ].map((action, i) => (
@@ -2031,7 +2218,7 @@ export default function App() {
               </div>
 
               <div className="space-y-2 text-center sm:text-left">
-                <label className="text-[8px] font-black text-slate-500 uppercase flex items-center justify-center sm:justify-start gap-2 tracking-widest"><Banknote className="w-4 h-4 text-emerald-500" /> সংগ্রহের পরিমাণ (টাকা) *</label>
+                <label className="text-[8px] font-black text-slate-500 uppercase flex items-center justify-center sm:justify-start gap-2 tracking-widest"><TrendingUp className="w-4 h-4 text-emerald-500" /> সংগ্রহের পরিমাণ (টাকা) *</label>
                 <input 
                   type="number" 
                   value={collectionAmount}
@@ -2181,7 +2368,7 @@ export default function App() {
 
         {showWithdrawModal && withdrawingUser && (
           <Modal 
-            title="টাকা উত্তোলন করুন" 
+            title={withdrawMode === 'withdraw' ? "টাকা উত্তোলন করুন" : "টাকা বৃদ্ধি করুন / জমা দিন"} 
             onClose={() => setShowWithdrawModal(false)}
             isLoading={isProcessing}
             isSuccess={isSuccess}
@@ -2189,8 +2376,10 @@ export default function App() {
           >
             <div className="bg-slate-50 rounded-3xl p-6 mb-6 border border-slate-100">
               <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-100">
-                  <ArrowUpCircle className="w-7 h-7" />
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white shadow-lg ${
+                  withdrawMode === 'withdraw' ? 'bg-blue-600 shadow-blue-100' : 'bg-emerald-600 shadow-emerald-100'
+                }`}>
+                  {withdrawMode === 'withdraw' ? <ArrowUpCircle className="w-7 h-7" /> : <TrendingUp className="w-7 h-7" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="text-md font-black text-slate-800 uppercase tracking-tight truncate">{withdrawingUser.name}</h3>
@@ -2206,29 +2395,54 @@ export default function App() {
               </div>
             </div>
 
+            {/* Mode Toggle */}
+            <div className="flex bg-slate-100 p-1 rounded-2xl mb-6">
+              <button 
+                onClick={() => setWithdrawMode('withdraw')}
+                className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${
+                  withdrawMode === 'withdraw' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                টাকা উত্তোলন
+              </button>
+              <button 
+                onClick={() => setWithdrawMode('add')}
+                className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${
+                  withdrawMode === 'add' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                টাকা বাড়ানো
+              </button>
+            </div>
+
             <div className="space-y-5">
               <div className="space-y-2">
                 <label className="text-[8px] font-black text-slate-500 uppercase flex items-center gap-2 tracking-widest">
-                  <Banknote className="w-4 h-4 text-blue-500" /> উত্তোলনের পরিমাণ (টাকা) *
+                  {withdrawMode === 'withdraw' ? <Banknote className="w-4 h-4 text-blue-500" /> : <TrendingUp className="w-4 h-4 text-emerald-500" />}
+                  {withdrawMode === 'withdraw' ? 'উত্তোলনের পরিমাণ (টাকা) *' : 'বৃদ্ধির পরিমাণ (টাকা) *'}
                 </label>
                 <input 
                   type="number" 
                   value={withdrawAmount}
                   onChange={(e) => setWithdrawAmount(e.target.value)}
                   placeholder="টাকার পরিমাণ লিখুন" 
-                  className="w-full px-6 py-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-600/10 outline-none transition-all text-md font-black text-blue-600" 
+                  className={`w-full px-6 py-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:bg-white focus:ring-4 outline-none transition-all text-md font-black ${
+                    withdrawMode === 'withdraw' ? 'focus:border-blue-600 focus:ring-blue-600/10 text-blue-600' : 'focus:border-emerald-600 focus:ring-emerald-600/10 text-emerald-600'
+                  }`} 
                 />
               </div>
 
               <div className="space-y-2">
                 <label className="text-[8px] font-black text-slate-500 uppercase flex items-center gap-2 tracking-widest">
-                  <FileText className="w-4 h-4 text-slate-400" /> উত্তোলনের কারণ / উদ্দেশ্য *
+                  <FileText className="w-4 h-4 text-slate-400" /> {withdrawMode === 'withdraw' ? 'উত্তোলনের কারণ / উদ্দেশ্য *' : 'বৃদ্ধির কারণ / নোট *'}
                 </label>
                 <textarea 
                   value={withdrawPurpose}
                   onChange={(e) => setWithdrawPurpose(e.target.value)}
-                  placeholder="কেন টাকা উত্তোলন করা হচ্ছে তা লিখুন..." 
-                  className="w-full px-6 py-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-600/10 outline-none transition-all text-[10px] font-bold text-slate-700 min-h-[100px] resize-none" 
+                  placeholder={withdrawMode === 'withdraw' ? "কেন টাকা উত্তোলন করা হচ্ছে তা লিখুন..." : "কেন টাকা বৃদ্ধি করা হচ্ছে বা কোনো নোট থাকলে লিখুন..."}
+                  className={`w-full px-6 py-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:bg-white focus:ring-4 outline-none transition-all text-[10px] font-bold text-slate-700 min-h-[100px] resize-none ${
+                    withdrawMode === 'withdraw' ? 'focus:border-blue-600 focus:ring-blue-600/10' : 'focus:border-emerald-600 focus:ring-emerald-600/10'
+                  }`}
                 />
               </div>
 
@@ -2238,7 +2452,9 @@ export default function App() {
                   whileTap={{ scale: 0.98 }}
                   onClick={processWithdrawal}
                   disabled={isProcessing}
-                  className="py-4 bg-blue-600 text-white rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  className={`py-4 text-white rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2 ${
+                    withdrawMode === 'withdraw' ? 'bg-blue-600 shadow-blue-100 hover:bg-blue-700' : 'bg-emerald-600 shadow-emerald-100 hover:bg-emerald-700'
+                  }`}
                 >
                   {isProcessing ? (
                     <>
@@ -2247,7 +2463,7 @@ export default function App() {
                     </>
                   ) : (
                     <>
-                      <CheckCircle2 className="w-4 h-4" /> উত্তোলন সম্পন্ন করুন
+                      <CheckCircle2 className="w-4 h-4" /> {withdrawMode === 'withdraw' ? 'উত্তোলন সম্পন্ন করুন' : 'বৃদ্ধি সম্পন্ন করুন'}
                     </>
                   )}
                 </motion.button>
@@ -2260,6 +2476,69 @@ export default function App() {
                 >
                   বাতিল করুন
                 </motion.button>
+              </div>
+
+              {/* Transaction History Section in Withdraw Modal */}
+              <div className="mt-8 pt-8 border-t border-slate-100">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-400">
+                      <History className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-[8px] font-black text-slate-800 uppercase tracking-widest">লেনদেনের ইতিহাস</h3>
+                      <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">উত্তোলন ও জমার রেকর্ডসমূহ</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                  {/* Combine both collections and withdrawals for a full history view */}
+                  {(() => {
+                    const fullHistory = [
+                      ...(withdrawingUser.withdrawals || []).map(w => ({ ...w, type: 'withdraw' as const })),
+                      ...(withdrawingUser.history || []).map(h => ({ ...h, type: 'add' as const, purpose: (h as any).purpose || 'কিস্তি / জমা' }))
+                    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+                    if (fullHistory.length === 0) {
+                      return (
+                        <div className="bg-slate-50/50 rounded-3xl p-10 text-center border-2 border-dashed border-slate-100">
+                          <p className="text-[8px] font-bold text-slate-400 uppercase tracking-[0.2em]">কোনো লেনদেনের ইতিহাস পাওয়া যায়নি</p>
+                        </div>
+                      );
+                    }
+
+                    return fullHistory.map((item, idx) => (
+                      <motion.div 
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: idx * 0.03 }}
+                        key={`hist-withdraw-modal-${idx}`} 
+                        className="bg-white rounded-2xl p-4 border border-slate-100 flex justify-between items-center group hover:shadow-md transition-all"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                            item.type === 'withdraw' ? 'bg-rose-50 text-rose-500' : 'bg-emerald-50 text-emerald-500'
+                          }`}>
+                            {item.type === 'withdraw' ? <ArrowDownCircle className="w-5 h-5" /> : <ArrowUpCircle className="w-5 h-5" />}
+                          </div>
+                          <div>
+                            <p className="text-[8px] font-black text-slate-800">{formatDate(item.date)}</p>
+                            <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest truncate max-w-[150px]">{item.purpose}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className={`text-[9px] font-black ${item.type === 'withdraw' ? 'text-rose-600' : 'text-emerald-600'}`}>
+                            {item.type === 'withdraw' ? '-' : '+'}{toBn(item.amount.toLocaleString())} ৳
+                          </p>
+                          <p className="text-[7px] font-bold text-slate-400 uppercase tracking-widest">
+                            {item.type === 'withdraw' ? 'উত্তোলন' : 'জমা / বৃদ্ধি'}
+                          </p>
+                        </div>
+                      </motion.div>
+                    ));
+                  })()}
+                </div>
               </div>
             </div>
           </Modal>
