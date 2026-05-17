@@ -24,6 +24,7 @@ export interface User {
   terms?: string;
   history?: CollectionHistory[];
   withdrawals?: WithdrawalHistory[];
+  collectedBalance?: number;
   isActive: boolean;
 }
 

@@ -28,22 +28,25 @@ service cloud.firestore {
       function isValidUser(data) {
         return data.keys().hasAll(['name', 'address', 'mobile', 'jomirPoriman', 'amount', 'expireDate', 'pwrBalance', 'chukirdharirName']) &&
                data.name is string && data.name.size() <= 200 &&
-               data.address is string && data.address.size() <= 500 &&
-               data.mobile is string && data.mobile.size() <= 20 &&
-               data.jomirPoriman is string && data.jomirPoriman.size() <= 100 &&
+               data.address is string && data.address.size() <= 600 &&
+               data.mobile is string && data.mobile.size() <= 40 &&
+               data.jomirPoriman is string && data.jomirPoriman.size() <= 200 &&
                data.amount is number &&
                data.expireDate is string && data.expireDate.size() <= 64 &&
                data.pwrBalance is number &&
                data.chukirdharirName is string && data.chukirdharirName.size() <= 200 &&
+               (!data.keys().contains('collectedBalance') || data.collectedBalance is number) &&
                (!data.keys().contains('isActive') || data.isActive is bool) &&
+               (!data.keys().contains('terms') || (data.terms is string && data.terms.size() <= 2000)) &&
+               (!data.keys().contains('history') || data.history is list) &&
                (!data.keys().contains('withdrawals') || data.withdrawals is list);
       }
 
       allow read: if isVerified();
-      allow create: if isVerified() && isValidUser(request.resource.data);
+      allow create: if isVerified() && (isAdmin() || isValidUser(request.resource.data));
+      
       allow update: if isVerified() && (
-        // Action: Edit Profile
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'address', 'mobile', 'jomirPoriman', 'amount', 'expireDate', 'pwrBalance', 'chukirdharirName', 'isActive', 'withdrawals']) && isValidUser(request.resource.data)) ||
+        isAdmin() ||
         // Action: Toggle Status (isActive)
         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isActive']) &&
          request.resource.data.isActive is bool) ||
@@ -51,13 +54,22 @@ service cloud.firestore {
         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['amount', 'withdrawals']) &&
          request.resource.data.amount is number &&
          request.resource.data.withdrawals is list) ||
+        // Action: Deposit / Increase (amount and history list change)
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['amount', 'history']) &&
+         request.resource.data.amount is number &&
+         request.resource.data.history is list) ||
         // Action: Collect / Extend
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['expireDate', 'pwrBalance', 'history']) && 
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['collectedBalance', 'expireDate', 'pwrBalance', 'terms', 'history']) && 
+         request.resource.data.collectedBalance is number &&
          request.resource.data.expireDate is string &&
          request.resource.data.pwrBalance is number &&
-         request.resource.data.history is list)
+         request.resource.data.history is list) ||
+        // Action: Full Edit
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'address', 'mobile', 'jomirPoriman', 'amount', 'collectedBalance', 'expireDate', 'pwrBalance', 'chukirdharirName', 'isActive', 'withdrawals', 'terms', 'history']) && 
+         isValidUser(request.resource.data))
       );
-      allow delete: if isVerified();
+
+      allow delete: if isAdmin();
 
       match /history/{historyId} {
         allow read, write: if isVerified();

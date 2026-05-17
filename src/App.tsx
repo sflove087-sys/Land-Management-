@@ -59,7 +59,10 @@ import {
   Music,
   Bell,
   BellRing,
-  Volume1
+  Volume1,
+  Settings,
+  ToggleLeft,
+  ToggleRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toPng } from 'html-to-image';
@@ -330,8 +333,38 @@ const SOUNDS = {
   click: 'https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3',
   pop: 'https://assets.mixkit.co/active_storage/sfx/2017/2017-preview.mp3',
   error: 'https://assets.mixkit.co/active_storage/sfx/2004/2004-preview.mp3',
-  ambient: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3'
+  ambient: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3'
 };
+
+const speak = (text: string, isMuted: boolean, isSpeechEnabled: boolean) => {
+  if (isMuted || !isSpeechEnabled || !window.speechSynthesis) return;
+  
+  // Cancel any ongoing speech
+  window.speechSynthesis.cancel();
+  
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = 'bn-BD'; // Bengali (Bangladesh)
+  utterance.rate = 0.9; // Slightly slower for better clarity
+  utterance.pitch = 1.0;
+  
+  // Find a Bengali voice if available
+  const voices = window.speechSynthesis.getVoices();
+  const bnVoice = voices.find(v => v.lang === 'bn-BD') || 
+                  voices.find(v => v.lang.includes('bn')) || 
+                  voices.find(v => v.lang.includes('BD'));
+  
+  if (bnVoice) utterance.voice = bnVoice;
+  
+  window.speechSynthesis.speak(utterance);
+};
+
+// Pre-fetch voices
+if (typeof window !== 'undefined' && window.speechSynthesis) {
+  window.speechSynthesis.getVoices();
+  window.speechSynthesis.onvoiceschanged = () => {
+    window.speechSynthesis.getVoices();
+  };
+}
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
@@ -339,34 +372,104 @@ export default function App() {
   const [users, setUsers] = useState<User[]>([]);
   
   // Audio State
-  const [isMuted, setIsMuted] = useState(false);
-  const [isMusicPlaying, setIsMusicPlaying] = useState(false);
+  const [isMuted, setIsMuted] = useState(() => localStorage.getItem('isMuted') === 'true');
+  const [isMusicPlaying, setIsMusicPlaying] = useState(() => localStorage.getItem('isMusicPlaying') === 'true');
+  const [isSpeechEnabled, setIsSpeechEnabled] = useState(() => localStorage.getItem('isSpeechEnabled') !== 'false');
   const bgMusicRef = useRef<HTMLAudioElement | null>(null);
+
+  // Sync settings to localStorage
+  useEffect(() => {
+    localStorage.setItem('isMuted', String(isMuted));
+    localStorage.setItem('isMusicPlaying', String(isMusicPlaying));
+    localStorage.setItem('isSpeechEnabled', String(isSpeechEnabled));
+  }, [isMuted, isMusicPlaying, isSpeechEnabled]);
 
   // Notification State
   const [notifications, setNotifications] = useState<{id: string, title: string, message: string, date: string, type: 'warning' | 'alert'}[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+
+  // Unlock audio and preload voices
+  useEffect(() => {
+    const handleFirstInteraction = () => {
+      // Create and play a silent buffer to unlock audio on mobile/strict browsers
+      const silentAudio = new Audio();
+      silentAudio.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
+      silentAudio.play().catch(() => {});
+      
+      // Load voices for speech synthesis
+      if (window.speechSynthesis) {
+        window.speechSynthesis.getVoices();
+      }
+      
+      window.removeEventListener('click', handleFirstInteraction);
+      window.removeEventListener('touchstart', handleFirstInteraction);
+    };
+
+    window.addEventListener('click', handleFirstInteraction);
+    window.addEventListener('touchstart', handleFirstInteraction);
+
+    return () => {
+      window.removeEventListener('click', handleFirstInteraction);
+      window.removeEventListener('touchstart', handleFirstInteraction);
+    };
+  }, []);
 
   const playSound = useCallback((type: keyof typeof SOUNDS) => {
     if (isMuted) return;
-    const audio = new Audio(SOUNDS[type]);
-    audio.volume = 0.5;
-    audio.play().catch(() => {});
+    try {
+      const audio = new Audio();
+      // Set source only when ready to play to avoid early load errors
+      audio.src = SOUNDS[type];
+      audio.volume = 0.5;
+      
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(error => {
+          if (error.name === 'NotAllowedError') {
+            console.warn("Autoplay was prevented. User interaction required.");
+          } else {
+            console.warn("Audio playback failed:", error.message);
+          }
+        });
+      }
+      
+      audio.onerror = (e) => {
+        console.error("Audio failed to load:", SOUNDS[type], e);
+      };
+    } catch (err) {
+      console.error("Error in playSound:", err);
+    }
   }, [isMuted]);
 
   useEffect(() => {
+    let audio: HTMLAudioElement | null = null;
+
     if (isMusicPlaying && !isMuted) {
       if (!bgMusicRef.current) {
-        bgMusicRef.current = new Audio(SOUNDS.ambient);
+        bgMusicRef.current = new Audio();
+        bgMusicRef.current.src = SOUNDS.ambient;
         bgMusicRef.current.loop = true;
         bgMusicRef.current.volume = 0.2;
+        
+        bgMusicRef.current.onerror = (e) => {
+          console.error("Ambient music failed to load:", SOUNDS.ambient, e);
+          setIsMusicPlaying(false);
+        };
       }
-      bgMusicRef.current.play().catch(() => {});
+      
+      audio = bgMusicRef.current;
+      audio.play().catch(error => {
+        if (error.name === 'NotAllowedError') {
+          console.warn("Ambient music autoplay prevented. Waiting for user interaction.");
+        }
+      });
     } else {
       if (bgMusicRef.current) {
         bgMusicRef.current.pause();
       }
     }
+
     return () => {
       if (bgMusicRef.current) {
         bgMusicRef.current.pause();
@@ -446,6 +549,121 @@ export default function App() {
     end: new Date().toISOString().split('T')[0] 
   });
 
+  // Form Auto-save State
+  const [formValues, setFormValues] = useState({
+    name: '',
+    chukirdharirName: '',
+    mobile: '',
+    address: '',
+    jomirPoriman: '',
+    amount: '',
+    expireDate: '',
+    pwrBalance: '',
+    terms: ''
+  });
+  const [showRestorePrompt, setShowRestorePrompt] = useState(false);
+
+  const initialAddState = useMemo(() => ({
+    name: '',
+    chukirdharirName: '',
+    mobile: '',
+    address: '',
+    jomirPoriman: '',
+    amount: '',
+    expireDate: '',
+    pwrBalance: '',
+    terms: ''
+  }), []);
+
+  // Handle opening modal and checking for draft
+  useEffect(() => {
+    if (showAddEditModal) {
+      if (editingUser) {
+        const initialState = {
+          name: editingUser.name || '',
+          chukirdharirName: editingUser.chukirdharirName || '',
+          mobile: editingUser.mobile || '',
+          address: editingUser.address || '',
+          jomirPoriman: editingUser.jomirPoriman || '',
+          amount: editingUser.amount?.toString() || '',
+          expireDate: editingUser.expireDate || '',
+          pwrBalance: editingUser.pwrBalance?.toString() || '',
+          terms: editingUser.terms || ''
+        };
+        setFormValues(initialState);
+        
+        const draft = localStorage.getItem(`draft_edit_${editingUser.id}`);
+        if (draft) {
+          try {
+            const parsedDraft = JSON.parse(draft);
+            const isDifferent = Object.keys(initialState).some(key => 
+              String(parsedDraft[key] || '') !== String((initialState as any)[key] || '')
+            );
+            if (isDifferent) {
+              setShowRestorePrompt(true);
+            }
+          } catch (e) {
+            console.error("Draft parse error", e);
+          }
+        }
+      } else {
+        setFormValues(initialAddState);
+        const draft = localStorage.getItem('draft_add');
+        if (draft) {
+          try {
+            const parsedDraft = JSON.parse(draft);
+            const hasContent = Object.values(parsedDraft).some(v => v !== '');
+            if (hasContent) {
+              setShowRestorePrompt(true);
+            }
+          } catch (e) {
+            console.error("Draft parse error", e);
+          }
+        }
+      }
+    } else {
+      setShowRestorePrompt(false);
+    }
+  }, [showAddEditModal, editingUser, initialAddState]);
+
+  // Auto-save effect
+  useEffect(() => {
+    if (showAddEditModal) {
+      const timeoutId = setTimeout(() => {
+        const draftKey = editingUser ? `draft_edit_${editingUser.id}` : 'draft_add';
+        localStorage.setItem(draftKey, JSON.stringify(formValues));
+      }, 1000);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [formValues, showAddEditModal, editingUser]);
+
+  const handleRestoreDraft = () => {
+    const draftKey = editingUser ? `draft_edit_${editingUser.id}` : 'draft_add';
+    const draft = localStorage.getItem(draftKey);
+    if (draft) {
+      setFormValues(JSON.parse(draft));
+      setShowRestorePrompt(false);
+      playSound('success');
+      speak("ড্রাফট রিস্টোর করা হয়েছে", isMuted, isSpeechEnabled);
+    }
+  };
+
+  const handleDiscardDraft = () => {
+    const draftKey = editingUser ? `draft_edit_${editingUser.id}` : 'draft_add';
+    localStorage.removeItem(draftKey);
+    setShowRestorePrompt(false);
+    playSound('error');
+    speak("ড্রাফট মুছে ফেলা হয়েছে", isMuted, isSpeechEnabled);
+  };
+
+  const handleFormInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormValues(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
   useEffect(() => {
     const testConnection = async () => {
       try {
@@ -498,6 +716,14 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
+  const bnToEn = (str: string) => {
+    const bnNums = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
+    return str.split('').map(c => {
+      const idx = bnNums.indexOf(c);
+      return idx !== -1 ? idx.toString() : c;
+    }).join('');
+  };
+
   const filteredUsers = useMemo(() => {
     let result = users.filter(user => {
       const daysLeft = getDaysLeft(user.expireDate);
@@ -524,7 +750,18 @@ export default function App() {
           }
 
           if (typeof aValue === 'string' && typeof bValue === 'string') {
-            const comparison = aValue.localeCompare(bValue);
+            // Natural sort attempt with Bengali number support
+            const aEn = bnToEn(aValue);
+            const bEn = bnToEn(bValue);
+            
+            const aNum = parseFloat(aEn.replace(/[^\d.]/g, ''));
+            const bNum = parseFloat(bEn.replace(/[^\d.]/g, ''));
+            
+            if (!isNaN(aNum) && !isNaN(bNum) && aNum !== bNum) {
+              return direction === 'asc' ? aNum - bNum : bNum - aNum;
+            }
+
+            const comparison = aValue.localeCompare(bValue, 'bn-BD', { numeric: true });
             return direction === 'asc' ? comparison : -comparison;
           }
         }
@@ -596,23 +833,26 @@ export default function App() {
     await new Promise(resolve => setTimeout(resolve, 1000));
     
     const userData = {
-      name: formData.get('name') as string,
-      address: formData.get('address') as string,
-      mobile: formData.get('mobile') as string,
-      jomirPoriman: formData.get('jomirPoriman') as string,
-      amount: parseFloat(formData.get('amount') as string),
-      expireDate: formData.get('expireDate') as string,
-      pwrBalance: parseFloat(formData.get('pwrBalance') as string),
-      chukirdharirName: formData.get('chukirdharirName') as string,
+      name: formValues.name,
+      address: formValues.address,
+      mobile: formValues.mobile,
+      jomirPoriman: formValues.jomirPoriman,
+      amount: parseFloat(formValues.amount),
+      expireDate: formValues.expireDate,
+      pwrBalance: parseFloat(formValues.pwrBalance),
+      chukirdharirName: formValues.chukirdharirName,
       isActive: editingUser ? editingUser.isActive : true,
-      withdrawals: editingUser ? (editingUser.withdrawals || []) : []
+      withdrawals: editingUser ? (editingUser.withdrawals || []) : [],
+      terms: formValues.terms || '',
     };
 
     try {
       if (editingUser) {
         await updateDoc(doc(db, 'users', editingUser.id), userData);
+        localStorage.removeItem(`draft_edit_${editingUser.id}`);
       } else {
         await addDoc(collection(db, 'users'), userData);
+        localStorage.removeItem('draft_add');
       }
       playSound('success');
       setIsSuccess(true);
@@ -680,13 +920,14 @@ export default function App() {
     try {
       const updatedHistory = [...(collectingUser.history || []), newHistoryEntry];
       await updateDoc(doc(db, 'users', collectingUser.id), {
-        amount: collectingUser.amount + cost,
+        collectedBalance: (collectingUser.collectedBalance || 0) + cost,
         expireDate: newExpiryDate,
         pwrBalance: collectingUser.pwrBalance - cost,
         terms: collectionTerms,
         history: updatedHistory
       });
       playSound('success');
+      speak("টাকা সংগ্রহ ও মেয়াদ বৃদ্ধি সফল হয়েছে", isMuted, isSpeechEnabled);
       setIsSuccess(true);
       await new Promise(resolve => setTimeout(resolve, 2000));
       setIsSuccess(false);
@@ -795,6 +1036,7 @@ export default function App() {
         });
       }
       playSound('success');
+      speak(withdrawMode === 'withdraw' ? "টাকা উত্তোলন সফল হয়েছে" : "টাকা বৃদ্ধি সফল হয়েছে", isMuted, isSpeechEnabled);
       setIsSuccess(true);
       await new Promise(resolve => setTimeout(resolve, 2000));
       setIsSuccess(false);
@@ -916,11 +1158,13 @@ export default function App() {
           
           <button 
             onClick={async () => {
+              playSound('click');
               setIsProcessing(true);
               // Artificial delay for user request
               await new Promise(resolve => setTimeout(resolve, 1000));
               try {
                 await signInWithGoogle();
+                speak("স্বাগতম! আপনার সিস্টেমে লগইন সফল হয়েছে।", isMuted, isSpeechEnabled);
                 setIsSuccess(true);
                 await new Promise(resolve => setTimeout(resolve, 2000));
                 setIsSuccess(false);
@@ -1034,7 +1278,10 @@ export default function App() {
             <motion.button
               whileHover={{ backgroundColor: "var(--color-rose-50)" }}
               whileTap={{ scale: 0.98 }}
-              onClick={handleLogout}
+              onClick={() => {
+                handleLogout();
+                playSound('click');
+              }}
               className="w-full flex items-center gap-3 px-5 py-4 rounded-2xl font-black uppercase tracking-[0.15em] text-[8px] text-rose-500 transition-all"
             >
               <LogOut className="w-4 h-4" />
@@ -1147,6 +1394,19 @@ export default function App() {
                     )}
                   </AnimatePresence>
                 </div>
+
+                {/* Settings Button */}
+                <motion.button 
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => {
+                    setShowSettingsModal(true);
+                    playSound('pop');
+                  }}
+                  className={`p-3 rounded-xl transition-all shadow-sm border border-slate-100 bg-white text-slate-400 hover:text-bkash`}
+                  title="সেটিংস"
+                >
+                  <Settings size={16} />
+                </motion.button>
               </div>
             </div>
             <motion.button 
@@ -1224,7 +1484,10 @@ export default function App() {
                     key={s}
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => setFilter(s)}
+                    onClick={() => {
+                      setFilter(s);
+                      playSound('pop');
+                    }}
                     aria-pressed={filter === s}
                     className={`whitespace-nowrap px-5 py-2.5 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all duration-300 flex-1 md:flex-none ${
                       filter === s ? 'bg-white shadow-md text-bkash' : 'text-slate-400 hover:text-slate-600'
@@ -1236,9 +1499,15 @@ export default function App() {
               </div>
 
               <div className="flex items-center gap-2 bg-slate-800 p-1.5 rounded-[1.25rem] shadow-lg shadow-slate-900/10 overflow-x-auto no-scrollbar scroll-smooth">
-                <div className="px-3 py-2 flex items-center gap-2 text-slate-400 border-r border-slate-700/50 shrink-0">
+                <div className="px-3 py-2 flex items-center gap-2 text-slate-400 border-r border-slate-700/50 shrink-0 group relative">
                   <ArrowUpDown className="w-3 h-3" />
                   <span className="text-[7px] font-black uppercase tracking-widest hidden sm:inline">Sort By</span>
+                  {/* Tooltip hint for Shift+Click */}
+                  <div className="absolute bottom-full left-0 mb-2 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all">
+                    <div className="bg-slate-900 text-white text-[6px] font-bold px-2 py-1 rounded whitespace-nowrap shadow-xl border border-slate-700 uppercase tracking-widest">
+                      Shift + Click for Multi-Sort
+                    </div>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2 w-full">
                   {[
@@ -1246,13 +1515,18 @@ export default function App() {
                     { key: 'amount', label: 'Ledger' },
                     { key: 'expireDate', label: 'Timeline' },
                   ].map((item) => {
-                    const isActive = sortConfig.find(sc => sc.key === item.key);
+                    const isActive = sortConfig.find(sc => sc.field === item.key);
+                    const index = sortConfig.findIndex(sc => sc.field === item.key);
+                    
                     return (
                       <motion.button
                         key={item.key}
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
-                        onClick={(e) => toggleSort(item.key as keyof User, e.shiftKey)}
+                        onClick={(e) => {
+                          toggleSort(item.key as keyof User, e.shiftKey);
+                          playSound('click');
+                        }}
                         aria-label={`Sort by ${item.label}`}
                         aria-pressed={!!isActive}
                         className={`whitespace-nowrap px-4 py-2.5 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all flex-1 md:flex-none ${
@@ -1261,7 +1535,14 @@ export default function App() {
                       >
                         {item.label}
                         {isActive && (
-                          isActive.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />
+                          <div className="flex items-center gap-1">
+                            {isActive.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                            {sortConfig.length > 1 && (
+                              <span className={`text-[7px] w-3 h-3 flex items-center justify-center rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-bkash/10 text-bkash'}`}>
+                                {index + 1}
+                              </span>
+                            )}
+                          </div>
                         )}
                       </motion.button>
                     );
@@ -1337,7 +1618,7 @@ export default function App() {
                           </motion.button>
                           <div className="flex gap-1.5">
                             {[
-                              { icon: Eye, label: 'বিস্তারিত', color: 'text-slate-400 bg-slate-50 border-slate-100', onClick: () => { setViewingUser(user); setViewMode('details'); setShowViewModal(true); } },
+                              { icon: Eye, label: 'বিস্তারিত', color: 'text-slate-400 bg-slate-50 border-slate-100', onClick: () => { setViewingUser(user); setViewMode('details'); setShowViewModal(true); playSound('pop'); } },
                               { icon: ArrowUpCircle, label: 'উত্তোলন', color: 'text-blue-500 bg-blue-50 border-blue-100', onClick: () => handleOpenWithdraw(user) },
                               { icon: user.isActive ? UserMinus : UserCheck, label: user.isActive ? 'ডিঅ্যাক্টিভেট' : 'অ্যাক্টিভেট', color: user.isActive ? 'text-amber-500 bg-amber-50 border-amber-100' : 'text-emerald-500 bg-emerald-50 border-emerald-100', onClick: () => toggleUserStatus(user) },
                               { icon: HandCoins, label: 'সংগ্রহ', color: 'text-emerald-500 bg-emerald-50 border-emerald-100', onClick: () => handleOpenCollection(user) },
@@ -1369,9 +1650,15 @@ export default function App() {
                       <thead>
                         <tr className="bg-slate-50/80 border-b border-slate-100/50">
                           <th className="px-8 py-6 text-left">
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3 group relative">
                               <div className="w-2 h-2 rounded-full bg-slate-200" />
                               <span className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">#</span>
+                              {/* Tooltip hint for Shift+Click */}
+                              <div className="absolute bottom-full left-0 mb-2 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all pointer-events-none">
+                                <div className="bg-slate-900 text-white text-[6px] font-bold px-2 py-1 rounded whitespace-nowrap shadow-xl border border-slate-700 uppercase tracking-widest">
+                                  Shift + Click Header for Multi-Sort
+                                </div>
+                              </div>
                             </div>
                           </th>
                           <th 
@@ -1483,7 +1770,12 @@ export default function App() {
                                     <div className="flex items-center gap-1.5 px-3 py-1.5 bg-bkash-light/20 text-bkash rounded-xl border border-bkash/5">
                                       <span className="text-[9px] font-black tabular-nums">{toBn(user.pwrBalance.toLocaleString())} ৳</span>
                                     </div>
-                                    <span className="text-[7px] font-black text-slate-300 uppercase tracking-widest">টোটাল: {toBn(user.amount.toLocaleString())} ৳</span>
+                                    <div className="flex flex-col items-center">
+                                      <span className="text-[7px] font-black text-slate-300 uppercase tracking-widest">টোটাল: {toBn(user.amount.toLocaleString())} ৳</span>
+                                      {user.collectedBalance && user.collectedBalance > 0 && (
+                                        <span className="text-[7px] font-black text-emerald-500 uppercase tracking-widest mt-0.5">সংগ্রহ: {toBn(user.collectedBalance.toLocaleString())} ৳</span>
+                                      )}
+                                    </div>
                                   </div>
                                 </td>
                                 <td className="px-4 py-6">
@@ -1518,7 +1810,10 @@ export default function App() {
                                           key={i}
                                           whileHover={{ scale: 1.1, y: -2 }}
                                           whileTap={{ scale: 0.9 }}
-                                          onClick={action.onClick}
+                                          onClick={() => {
+                                   action.onClick();
+                                   playSound('pop');
+                                 }}
                                           aria-label={action.label}
                                           className={`w-10 h-10 rounded-2xl border flex items-center justify-center transition-all bg-white hover:text-white ${action.color}`}
                                         >
@@ -1564,6 +1859,7 @@ export default function App() {
             title="ব্যবহারকারী ডিলিট করুন" 
             onClose={() => setShowDeleteModal(false)}
             isLoading={isProcessing}
+            playSound={playSound}
             isSuccess={isSuccess}
             isError={isError}
           >
@@ -1580,7 +1876,10 @@ export default function App() {
                 <motion.button 
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => deleteUser(userToDelete.id)}
+                  onClick={() => {
+                    deleteUser(userToDelete.id);
+                    playSound('click');
+                  }}
                   disabled={isProcessing}
                   className="py-4 bg-rose-600 text-white rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] shadow-lg shadow-rose-100 hover:bg-rose-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -1598,7 +1897,10 @@ export default function App() {
                 <motion.button 
                   whileHover={{ backgroundColor: "var(--color-slate-200)" }}
                   whileTap={{ scale: 0.98 }}
-                  onClick={() => setShowDeleteModal(false)}
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    playSound('click');
+                  }}
                   className="py-4 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] transition-all"
                 >
                   বাতিল করুন
@@ -1613,45 +1915,85 @@ export default function App() {
             title={editingUser ? "তথ্য সম্পাদন করুন" : "নতুন এন্ট্রি যোগ করুন"} 
             onClose={() => setShowAddEditModal(false)}
             isLoading={isProcessing}
+            playSound={playSound}
             isSuccess={isSuccess}
             isError={isError}
           >
+            <AnimatePresence>
+              {showRestorePrompt && (
+                <motion.div
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className="mb-6 p-4 bg-bkash-light border border-bkash/10 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-bkash rounded-xl flex items-center justify-center text-white shrink-0">
+                      <History size={20} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-bkash uppercase tracking-wider">অসমাপ্ত ড্রাফট পাওয়া গিয়াছে</p>
+                      <p className="text-[8px] font-bold text-bkash/60 uppercase tracking-widest">আপনি কি আগের তথ্যগুলো রিস্টোর করতে চান?</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 w-full sm:w-auto">
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={handleRestoreDraft}
+                      className="flex-1 sm:flex-none px-4 py-2 bg-bkash text-white rounded-lg text-[8px] font-black uppercase tracking-widest shadow-lg shadow-bkash/20"
+                    >
+                      রিস্টোর করুন
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={handleDiscardDraft}
+                      className="flex-1 sm:flex-none px-4 py-2 bg-white text-slate-400 rounded-lg text-[8px] font-black uppercase tracking-widest border border-slate-100"
+                    >
+                      মুছে ফেলুন
+                    </motion.button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             <form onSubmit={handleAddEdit} className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
               <div className="space-y-1.5">
                 <label className="text-[8px] font-bold text-slate-400 uppercase flex items-center gap-1.5"><Users className="w-3 h-3" /> পূর্ণ নাম *</label>
-                <input name="name" required defaultValue={editingUser?.name} placeholder="যেমন: মোঃ রহিম মিয়া" className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-[8px] font-bold" />
+                <input name="name" required value={formValues.name} onChange={handleFormInputChange} placeholder="যেমন: মোঃ রহিম মিয়া" className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-[8px] font-bold" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-[8px] font-bold text-slate-400 uppercase flex items-center gap-1.5"><UserCheck className="w-3 h-3" /> চুক্তিধারীর নাম *</label>
-                <input name="chukirdharirName" required defaultValue={editingUser?.chukirdharirName} placeholder="যেমন: মোঃ শাহিন" className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-[8px] font-bold" />
+                <input name="chukirdharirName" required value={formValues.chukirdharirName} onChange={handleFormInputChange} placeholder="যেমন: মোঃ শাহিন" className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-[8px] font-bold" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-[8px] font-bold text-slate-400 uppercase flex items-center gap-1.5"><Phone className="w-3 h-3" /> মোবাইল নম্বর *</label>
-                <input name="mobile" required defaultValue={editingUser?.mobile} placeholder="01XXXXXXXXX" className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-[8px] font-bold" />
+                <input name="mobile" required value={formValues.mobile} onChange={handleFormInputChange} placeholder="01XXXXXXXXX" className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-[8px] font-bold" />
               </div>
               <div className="col-span-1 sm:col-span-2 space-y-1.5">
                 <label className="text-[8px] font-bold text-slate-400 uppercase flex items-center gap-1.5"><MapPin className="w-3 h-3" /> ঠিকানা *</label>
-                <textarea name="address" rows={2} required defaultValue={editingUser?.address} placeholder="গ্রাম, পোস্ট, জেলা" className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all resize-none text-[8px] font-bold" />
+                <textarea name="address" rows={2} required value={formValues.address} onChange={handleFormInputChange} placeholder="গ্রাম, পোস্ট, জেলা" className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all resize-none text-[8px] font-bold" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-[8px] font-bold text-slate-400 uppercase flex items-center gap-1.5"><TreeDeciduous className="w-3 h-3" /> জমির পরিমাণ *</label>
-                <input name="jomirPoriman" required defaultValue={editingUser?.jomirPoriman} placeholder="যেমন: ৫ কাঠা, ২ বিঘা" className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-[8px] font-bold" />
+                <input name="jomirPoriman" required value={formValues.jomirPoriman} onChange={handleFormInputChange} placeholder="যেমন: ৫ কাঠা, ২ বিঘা" className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-[8px] font-bold" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-[8px] font-bold text-slate-400 uppercase flex items-center gap-1.5"><Banknote className="w-3 h-3" /> চুক্তির পরিমাণ (টাকা) *</label>
-                <input type="number" name="amount" required defaultValue={editingUser?.amount} placeholder="যেমন: 50000" className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-[8px] font-bold" />
+                <input type="number" name="amount" required value={formValues.amount} onChange={handleFormInputChange} placeholder="যেমন: 50000" className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-[8px] font-bold" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-[8px] font-bold text-slate-400 uppercase flex items-center gap-1.5"><Calendar className="w-3 h-3" /> মেয়াদ শেষের তারিখ *</label>
-                <input type="date" name="expireDate" required defaultValue={editingUser?.expireDate} className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-[8px] font-bold" />
+                <input type="date" name="expireDate" required value={formValues.expireDate} onChange={handleFormInputChange} className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-[8px] font-bold" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-[8px] font-bold text-slate-400 uppercase flex items-center gap-1.5"><Wallet className="w-3 h-3" /> পাওয়ার ব্যালেন্স (টাকা) *</label>
-                <input type="number" name="pwrBalance" required defaultValue={editingUser?.pwrBalance} placeholder="যেমন: 1000" className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-[8px] font-bold" />
+                <input type="number" name="pwrBalance" required value={formValues.pwrBalance} onChange={handleFormInputChange} placeholder="যেমন: 1000" className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-[8px] font-bold" />
               </div>
               <div className="col-span-1 sm:col-span-2 space-y-1.5">
                 <label className="text-[8px] font-bold text-slate-400 uppercase flex items-center gap-1.5"><ScrollText className="w-3 h-3" /> চুক্তিনামা / শর্তাবলি</label>
-                <textarea name="terms" rows={3} defaultValue={editingUser?.terms} placeholder="চুক্তির বিশেষ শর্তাবলি লিখুন (প্রচ্ছদ রশিদ বা চুক্তিপত্রে প্রিন্ট হবে)..." className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all resize-none text-[8px] font-bold" />
+                <textarea name="terms" rows={3} value={formValues.terms} onChange={handleFormInputChange} placeholder="চুক্তির বিশেষ শর্তাবলি লিখুন (প্রচ্ছদ রশিদ বা চুক্তিপত্রে প্রিন্ট হবে)..." className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all resize-none text-[8px] font-bold" />
               </div>
               <div className="col-span-1 sm:col-span-2 flex flex-col sm:flex-row gap-4 mt-6">
                 <motion.button 
@@ -1687,6 +2029,7 @@ export default function App() {
             title="প্রোফাইল ইনফর্মেশন" 
             onClose={() => setShowViewModal(false)}
             isLoading={isProcessing}
+            playSound={playSound}
             isSuccess={isSuccess}
             isError={isError}
           >
@@ -1696,7 +2039,10 @@ export default function App() {
                     key={mode}
                     whileHover={{ scale: 1.01 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => setViewMode(mode)}
+                    onClick={() => {
+                      setViewMode(mode);
+                      playSound('click');
+                    }}
                     className={`flex-1 py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
                       viewMode === mode ? 'bg-white shadow-sm text-bkash' : 'text-slate-500'
                     }`}
@@ -2150,6 +2496,7 @@ export default function App() {
             onClose={() => setShowCollectionModal(false)}
             isLoading={isProcessing}
             isSuccess={isSuccess}
+            playSound={playSound}
             isError={isError}
           >
             {/* User Info Header */}
@@ -2371,6 +2718,7 @@ export default function App() {
             title={withdrawMode === 'withdraw' ? "টাকা উত্তোলন করুন" : "টাকা বৃদ্ধি করুন / জমা দিন"} 
             onClose={() => setShowWithdrawModal(false)}
             isLoading={isProcessing}
+            playSound={playSound}
             isSuccess={isSuccess}
             isError={isError}
           >
@@ -2398,7 +2746,10 @@ export default function App() {
             {/* Mode Toggle */}
             <div className="flex bg-slate-100 p-1 rounded-2xl mb-6">
               <button 
-                onClick={() => setWithdrawMode('withdraw')}
+                onClick={() => {
+                  setWithdrawMode('withdraw');
+                  playSound('click');
+                }}
                 className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${
                   withdrawMode === 'withdraw' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'
                 }`}
@@ -2406,7 +2757,10 @@ export default function App() {
                 টাকা উত্তোলন
               </button>
               <button 
-                onClick={() => setWithdrawMode('add')}
+                onClick={() => {
+                  setWithdrawMode('add');
+                  playSound('click');
+                }}
                 className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${
                   withdrawMode === 'add' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'
                 }`}
@@ -2549,6 +2903,7 @@ export default function App() {
             title="প্রতিবেদন জেনারেট করুন" 
             onClose={() => setShowReportsModal(false)}
             isLoading={isProcessing}
+            playSound={playSound}
             isSuccess={isSuccess}
             isError={isError}
           >
@@ -2657,6 +3012,148 @@ export default function App() {
             </div>
           </Modal>
         )}
+
+        {showSettingsModal && (
+          <Modal 
+            title="সিস্টেম সেটিংস ও পছন্দসমূহ" 
+            onClose={() => setShowSettingsModal(false)}
+            playSound={playSound}
+          >
+            <div className="space-y-8">
+              {/* Audio Settings */}
+              <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-10 h-10 rounded-2xl bg-bkash flex items-center justify-center text-white">
+                    <Volume2 size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">শব্দ ও মিউজিক</h3>
+                    <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">অডিও সেটিংস পরিবর্তন করুন</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-100 shadow-sm transition-all hover:border-bkash/30">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-xl ${isMuted ? 'bg-rose-50 text-rose-500' : 'bg-bkash-light text-bkash'}`}>
+                        {isMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+                      </div>
+                      <span className="text-[10px] font-black text-slate-700 uppercase tracking-wider">সিস্টেম সাউন্ড মিউট</span>
+                    </div>
+                    <motion.button
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => {
+                        setIsMuted(!isMuted);
+                        if (!isMuted === false) { // if unmuting
+                          const audio = new Audio(SOUNDS.click);
+                          audio.volume = 0.5;
+                          audio.play().catch(() => {});
+                        }
+                      }}
+                      className="focus:outline-none"
+                    >
+                      {isMuted ? (
+                        <ToggleRight className="w-10 h-10 text-rose-500" />
+                      ) : (
+                        <ToggleLeft className="w-10 h-10 text-slate-200" />
+                      )}
+                    </motion.button>
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-100 shadow-sm transition-all hover:border-bkash/30">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-xl ${!isSpeechEnabled ? 'bg-rose-50 text-rose-500' : 'bg-bkash-light text-bkash'}`}>
+                        <Volume1 size={18} />
+                      </div>
+                      <span className="text-[10px] font-black text-slate-700 uppercase tracking-wider">ভয়েস রিডিং (বাংলা)</span>
+                    </div>
+                    <motion.button
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => {
+                        setIsSpeechEnabled(!isSpeechEnabled);
+                        playSound('click');
+                        if (!isSpeechEnabled) {
+                          speak("ভয়েস রিডিং চালু করা হয়েছে", isMuted, true);
+                        }
+                      }}
+                      className="focus:outline-none"
+                    >
+                      {isSpeechEnabled ? (
+                        <ToggleRight className="w-10 h-10 text-bkash" />
+                      ) : (
+                        <ToggleLeft className="w-10 h-10 text-slate-200" />
+                      )}
+                    </motion.button>
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-100 shadow-sm transition-all hover:border-emerald-500/30">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-xl ${isMusicPlaying ? 'bg-emerald-50 text-emerald-500' : 'bg-slate-100 text-slate-400'}`}>
+                        <Music size={18} className={isMusicPlaying ? 'animate-pulse' : ''} />
+                      </div>
+                      <span className="text-[10px] font-black text-slate-700 uppercase tracking-wider">ব্যাকগ্রাউন্ড মিউজিক</span>
+                    </div>
+                    <motion.button
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => {
+                        setIsMusicPlaying(!isMusicPlaying);
+                        playSound('click');
+                      }}
+                      className="focus:outline-none"
+                    >
+                      {isMusicPlaying ? (
+                        <ToggleRight className="w-10 h-10 text-emerald-500" />
+                      ) : (
+                        <ToggleLeft className="w-10 h-10 text-slate-200" />
+                      )}
+                    </motion.button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Notification Settings */}
+              <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-10 h-10 rounded-2xl bg-amber-500 flex items-center justify-center text-white">
+                    <Bell size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">নোটিফিকেশন রিমাইন্ডার</h3>
+                    <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">রিমাইন্ডার ও মেসেজ সেটিংস</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="p-4 bg-white rounded-2xl border border-dashed border-slate-200 text-center">
+                    <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest leading-relaxed">
+                      মেয়াদ শেষ হওয়ার ৭ দিন আগে আপনাকে স্বয়ংক্রিয়ভাবে নোটিফিকেশন প্রদান করা হইবে।
+                    </p>
+                  </div>
+                  
+                  {notifications.length > 0 && (
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => {
+                        setNotifications([]);
+                        playSound('error');
+                      }}
+                      className="w-full py-4 bg-rose-50 text-rose-500 rounded-2xl font-black uppercase tracking-[0.2em] text-[8px] flex items-center justify-center gap-2 hover:bg-rose-100 transition-all border border-rose-100"
+                    >
+                      <Trash2 className="w-4 h-4" /> সকল নোটিফিকেশন ক্লিয়ার করুন
+                    </motion.button>
+                  )}
+                </div>
+              </div>
+
+              {/* System Info */}
+              <div className="px-6 text-center">
+                <p className="text-[7px] font-black text-slate-300 uppercase tracking-[0.4em] mb-2">LandManager Pro v2.1.0</p>
+                <p className="text-[6px] font-bold text-slate-400 uppercase tracking-[0.2em]">Designed & Developed with Passion</p>
+              </div>
+            </div>
+          </Modal>
+        )}
       </AnimatePresence>
 
       {/* Mobile Floating Action Button */}
@@ -2666,7 +3163,11 @@ export default function App() {
           animate={{ scale: 1, rotate: 0 }}
           whileHover={{ scale: 1.1, rotate: 90 }}
           whileTap={{ scale: 0.9 }}
-          onClick={() => { setEditingUser(null); setShowAddEditModal(true); }}
+          onClick={() => { 
+            setEditingUser(null); 
+            setShowAddEditModal(true); 
+            playSound('pop');
+          }}
           aria-label="নতুন এন্ট্রি যোগ করুন"
           className="w-16 h-16 bg-bkash text-white rounded-full shadow-2xl shadow-bkash/40 flex items-center justify-center border-4 border-white"
         >
@@ -2678,8 +3179,13 @@ export default function App() {
 }
 
 // Modal Component Helper
-function Modal({ title, children, onClose, isLoading, isSuccess, isError }: { title: string, children: React.ReactNode, onClose: () => void, isLoading?: boolean, isSuccess?: boolean, isError?: boolean }) {
+function Modal({ title, children, onClose, isLoading, isSuccess, isError, playSound }: { title: string, children: React.ReactNode, onClose: () => void, isLoading?: boolean, isSuccess?: boolean, isError?: boolean, playSound?: (type: any) => void }) {
   const modalId = React.useId();
+  
+  const handleClose = () => {
+    if (playSound) playSound('click');
+    onClose();
+  };
   
   return (
     <motion.div 
@@ -2690,7 +3196,7 @@ function Modal({ title, children, onClose, isLoading, isSuccess, isError }: { ti
       role="dialog"
       aria-modal="true"
       aria-labelledby={modalId}
-      onClick={isLoading ? undefined : onClose}
+      onClick={isLoading ? undefined : handleClose}
     >
       <motion.div 
         initial={{ y: "100%" }}
@@ -2709,7 +3215,7 @@ function Modal({ title, children, onClose, isLoading, isSuccess, isError }: { ti
           <h2 id={modalId} className="text-[12px] sm:text-lg font-black text-slate-800 tracking-tight">{title}</h2>
           <button 
             disabled={isLoading}
-            onClick={onClose} 
+            onClick={handleClose} 
             aria-label="Close modal"
             className="w-7 h-7 sm:w-10 sm:h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:bg-rose-50 hover:text-rose-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >

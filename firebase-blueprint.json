@@ -14,6 +14,8 @@
         "pwrBalance": { "type": "number", "description": "Current balance" },
         "chukirdharirName": { "type": "string", "description": "Contractor name" },
         "isActive": { "type": "boolean", "description": "Account status" },
+        "terms": { "type": "string", "description": "Collection terms" },
+        "history": { "type": "array", "description": "Collection history", "items": { "$ref": "CollectionHistory" } },
         "withdrawals": { "type": "array", "$ref": "WithdrawalHistory" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
