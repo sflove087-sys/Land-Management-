@@ -35,6 +35,8 @@ service cloud.firestore {
                data.expireDate is string && data.expireDate.size() <= 64 &&
                data.pwrBalance is number &&
                data.chukirdharirName is string && data.chukirdharirName.size() <= 200 &&
+               (!data.keys().contains('nameBn') || (data.nameBn is string && data.nameBn.size() <= 200)) &&
+               (!data.keys().contains('chukirdharirNameBn') || (data.chukirdharirNameBn is string && data.chukirdharirNameBn.size() <= 200)) &&
                (!data.keys().contains('collectedBalance') || data.collectedBalance is number) &&
                (!data.keys().contains('isActive') || data.isActive is bool) &&
                (!data.keys().contains('terms') || (data.terms is string && data.terms.size() <= 2000)) &&
@@ -65,7 +67,7 @@ service cloud.firestore {
          request.resource.data.pwrBalance is number &&
          request.resource.data.history is list) ||
         // Action: Full Edit
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'address', 'mobile', 'jomirPoriman', 'amount', 'collectedBalance', 'expireDate', 'pwrBalance', 'chukirdharirName', 'isActive', 'withdrawals', 'terms', 'history']) && 
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'address', 'mobile', 'jomirPoriman', 'amount', 'collectedBalance', 'expireDate', 'pwrBalance', 'chukirdharirName', 'nameBn', 'chukirdharirNameBn', 'isActive', 'withdrawals', 'terms', 'history']) && 
          isValidUser(request.resource.data))
       );
 

@@ -62,7 +62,8 @@ import {
   Volume1,
   Settings,
   ToggleLeft,
-  ToggleRight
+  ToggleRight,
+  Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toPng } from 'html-to-image';
@@ -84,7 +85,7 @@ import {
 } from 'firebase/firestore';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 
-const ActionSpinner = ({ isSuccess = false, isError = false }: { isSuccess?: boolean, isError?: boolean }) => (
+const ActionSpinner = ({ isSuccess = false, isError = false, errorMessage = "" }: { isSuccess?: boolean, isError?: boolean, errorMessage?: string }) => (
   <motion.div 
     initial={{ opacity: 0 }}
     animate={{ opacity: 1 }}
@@ -150,18 +151,34 @@ const ActionSpinner = ({ isSuccess = false, isError = false }: { isSuccess?: boo
       )}
 
       {isSuccess && (
-        <motion.div 
-          initial={{ scale: 0, rotateY: 180 }}
-          animate={{ scale: 1, rotateY: 360 }}
-          className="w-24 h-24 bg-emerald-500 rounded-full flex items-center justify-center shadow-[0_20px_50px_rgba(16,185,129,0.4)] border-4 border-white/20"
-        >
-          <motion.div
-            animate={{ scale: [1, 1.2, 1], rotateZ: [0, 10, -10, 0] }}
-            transition={{ repeat: Infinity, duration: 2 }}
+        <div className="relative">
+          {[...Array(12)].map((_, i) => (
+            <motion.div
+              key={`particle-${i}`}
+              initial={{ scale: 0, x: 0, y: 0 }}
+              animate={{ 
+                scale: [0, 1, 0], 
+                x: Math.cos(i * 30 * Math.PI / 180) * 80,
+                y: Math.sin(i * 30 * Math.PI / 180) * 80,
+                rotate: 360
+              }}
+              transition={{ duration: 1.5, repeat: Infinity, delay: i * 0.05 }}
+              className={`absolute w-2 h-2 rounded-full ${i % 3 === 0 ? 'bg-bkash' : i % 3 === 1 ? 'bg-emerald-400' : 'bg-blue-400'}`}
+            />
+          ))}
+          <motion.div 
+            initial={{ scale: 0, rotateY: 180 }}
+            animate={{ scale: 1, rotateY: 360 }}
+            className="w-24 h-24 bg-emerald-500 rounded-full flex items-center justify-center shadow-[0_20px_50px_rgba(16,185,129,0.4)] border-4 border-white/20 relative z-10"
           >
-            <CheckCircle2 className="w-12 h-12 text-white drop-shadow-md" />
+            <motion.div
+              animate={{ scale: [1, 1.2, 1], rotateZ: [0, 10, -10, 0] }}
+              transition={{ repeat: Infinity, duration: 2 }}
+            >
+              <CheckCircle2 className="w-12 h-12 text-white drop-shadow-md" />
+            </motion.div>
           </motion.div>
-        </motion.div>
+        </div>
       )}
 
       {isError && (
@@ -180,37 +197,69 @@ const ActionSpinner = ({ isSuccess = false, isError = false }: { isSuccess?: boo
       )}
     </div>
 
-    <div className="mt-8 flex flex-col items-center">
+    <div className="mt-8 flex flex-col items-center w-full max-w-[240px]">
       <motion.p 
         animate={{ opacity: [0.5, 1, 0.5] }}
         transition={{ repeat: Infinity, duration: 1.5 }}
-        className="text-[12px] font-black text-slate-800 uppercase tracking-[0.4em] mb-3"
+        className="text-[12px] font-black text-slate-800 uppercase tracking-[0.4em] mb-4"
       >
         {isSuccess ? 'সফল হয়েছে' : isError ? 'ব্যর্থ হয়েছে' : 'প্রসেসিং হচ্ছে'}
       </motion.p>
       
-      {!isSuccess && !isError && (
-        <div className="flex gap-2">
-          {[0, 1, 2].map((i) => (
-            <motion.div
-              key={`dot-${i}`}
-              animate={{ 
-                scale: [1, 2, 1], 
-                backgroundColor: ["#e2136e", "#3b82f6", "#e2136e"],
-                borderRadius: ["50%", "20%", "50%"]
-              }}
-              transition={{ repeat: Infinity, duration: 1.5, delay: i * 0.3 }}
-              className="w-2 h-2 bg-bkash shadow-lg"
-            />
-          ))}
+      {!isSuccess && !isError ? (
+        <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden relative border border-slate-200/50">
+          <motion.div
+            initial={{ width: "0%" }}
+            animate={{ width: "90%" }}
+            transition={{ duration: 4, ease: "easeOut" }}
+            className="absolute top-0 left-0 h-full bg-gradient-to-r from-bkash via-blue-500 to-emerald-500"
+          />
+          <motion.div
+            animate={{ x: ["-100%", "200%"] }}
+            transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
+            className="absolute top-0 left-0 w-1/2 h-full bg-white/30 skew-x-12"
+          />
         </div>
+      ) : isSuccess ? (
+        <motion.div 
+          initial={{ width: "0%" }}
+          animate={{ width: "100%" }}
+          className="w-full h-1.5 bg-emerald-500 rounded-full"
+        />
+      ) : (
+        <motion.div 
+          initial={{ width: "0%" }}
+          animate={{ width: "100%" }}
+          className="w-full h-1.5 bg-rose-500 rounded-full"
+        />
       )}
       
-      {(isSuccess || isError) && (
-        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-          {isSuccess ? 'ধন্যবাদ, আপনার অনুরোধটি সম্পন্ন হয়েছে' : 'দুঃখিত, কোনো একটি সমস্যা হয়েছে'}
-        </p>
-      )}
+      <div className="mt-4 flex flex-col items-center">
+        {(isSuccess || isError) ? (
+          <>
+            <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center leading-relaxed">
+              {isSuccess ? 'ধন্যবাদ, আপনার অনুরোধটি সম্পন্ন হয়েছে' : (errorMessage || 'দুঃখিত, কোনো একটি সমস্যা হয়েছে')}
+            </h4>
+            {isError && !errorMessage && (
+              <p className="text-[8px] font-black text-slate-300 uppercase tracking-[0.2em] mt-2">Error Occurred</p>
+            )}
+          </>
+        ) : (
+          <div className="flex gap-2">
+            {[0, 1, 2].map((i) => (
+              <motion.div
+                key={`dot-spinner-${i}`}
+                animate={{ 
+                  scale: [1, 1.5, 1],
+                  opacity: [0.3, 1, 0.3]
+                }}
+                transition={{ repeat: Infinity, duration: 1, delay: i * 0.2 }}
+                className="w-1.5 h-1.5 bg-slate-300 rounded-full"
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   </motion.div>
 );
@@ -326,6 +375,44 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
   console.error('Firestore Error: ', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
 }
+
+const getFriendlyErrorMessage = (error: unknown): string => {
+  let message = "একটি সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।";
+  
+  try {
+    const errorStr = error instanceof Error ? error.message : String(error);
+    let originalError = errorStr.toLowerCase();
+
+    if (errorStr.startsWith('{') && errorStr.endsWith('}')) {
+      try {
+        const errInfo = JSON.parse(errorStr) as FirestoreErrorInfo;
+        originalError = errInfo.error.toLowerCase();
+      } catch (e) {
+        // Not JSON or parse failed, use string as is
+      }
+    }
+    
+    if (originalError.includes('permission-denied') || originalError.includes('insufficient permissions')) {
+      message = "অ্যাক্সেস রিফিউজ করা হয়েছে। আপনার এই কাজটি করার অনুমতি নেই। এডমিনের সাথে যোগাযোগ করুন।";
+    } else if (originalError.includes('quota-exceeded')) {
+      message = "ডাটাবেস কোটা শেষ হয়ে গেছে। অনুগ্রহ করে একটু পরে আবার চেষ্টা করুন।";
+    } else if (originalError.includes('unavailable') || originalError.includes('offline')) {
+      message = "সার্ভার বর্তমানে এভেইলএবল নেই। আপনার ইন্টারনেট সংযোগ চেক করুন।";
+    } else if (originalError.includes('already-exists')) {
+      message = "এই তথ্যটি ডাটাবেসে অলরেডি সংরক্ষিত আছে।";
+    } else if (originalError.includes('network-request-failed')) {
+      message = "নেটওয়ার্ক কানেকশন ফেইল করেছে। পুনরায় চেষ্টা করুন।";
+    } else if (originalError.includes('invalid-argument')) {
+      message = "ভুল তথ্য প্রদান করা হয়েছে। ইনপুট চেক করে পুনরায় চেষ্টা করুন।";
+    } else if (originalError.includes('not-found')) {
+      message = "তথ্যটি পাওয়া যায়নি। ডাটাবেস চেক করে দেখুন।";
+    }
+  } catch (e) {
+    console.error("Error parsing friendly message:", e);
+  }
+  
+  return message;
+};
 
 // Sound URLs
 const SOUNDS = {
@@ -517,6 +604,7 @@ export default function App() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [isError, setIsError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const showSuccess = async () => {
     setIsSuccess(true);
@@ -552,7 +640,9 @@ export default function App() {
   // Form Auto-save State
   const [formValues, setFormValues] = useState({
     name: '',
+    nameBn: '',
     chukirdharirName: '',
+    chukirdharirNameBn: '',
     mobile: '',
     address: '',
     jomirPoriman: '',
@@ -562,10 +652,13 @@ export default function App() {
     terms: ''
   });
   const [showRestorePrompt, setShowRestorePrompt] = useState(false);
+  const [isTransliterating, setIsTransliterating] = useState<{[key: string]: boolean}>({});
 
   const initialAddState = useMemo(() => ({
     name: '',
+    nameBn: '',
     chukirdharirName: '',
+    chukirdharirNameBn: '',
     mobile: '',
     address: '',
     jomirPoriman: '',
@@ -575,13 +668,41 @@ export default function App() {
     terms: ''
   }), []);
 
+  const handleTransliterate = async (fieldName: 'name' | 'chukirdharirName') => {
+    const textToConvert = formValues[fieldName];
+    if (!textToConvert || textToConvert.trim() === '') return;
+
+    setIsTransliterating(prev => ({ ...prev, [fieldName]: true }));
+    try {
+      const response = await fetch('/api/transliterate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: textToConvert })
+      });
+      const data = await response.json();
+      if (data.result) {
+        setFormValues(prev => ({
+          ...prev,
+          [`${fieldName}Bn`]: data.result
+        }));
+        playSound('pop');
+      }
+    } catch (error) {
+      console.error("Transliteration failed:", error);
+    } finally {
+      setIsTransliterating(prev => ({ ...prev, [fieldName]: false }));
+    }
+  };
+
   // Handle opening modal and checking for draft
   useEffect(() => {
     if (showAddEditModal) {
       if (editingUser) {
         const initialState = {
           name: editingUser.name || '',
+          nameBn: editingUser.nameBn || '',
           chukirdharirName: editingUser.chukirdharirName || '',
+          chukirdharirNameBn: editingUser.chukirdharirNameBn || '',
           mobile: editingUser.mobile || '',
           address: editingUser.address || '',
           jomirPoriman: editingUser.jomirPoriman || '',
@@ -731,7 +852,10 @@ export default function App() {
       const matchesFilter = filter === 'all' || status === filter;
       const matchesSearch = 
         user.name.toLowerCase().includes(search.toLowerCase()) ||
+        (user.nameBn && user.nameBn.toLowerCase().includes(search.toLowerCase())) ||
         user.mobile.includes(search) ||
+        user.chukirdharirName.toLowerCase().includes(search.toLowerCase()) ||
+        (user.chukirdharirNameBn && user.chukirdharirNameBn.toLowerCase().includes(search.toLowerCase())) ||
         user.address.toLowerCase().includes(search.toLowerCase());
       return matchesFilter && matchesSearch;
     });
@@ -834,6 +958,7 @@ export default function App() {
     
     const userData = {
       name: formValues.name,
+      nameBn: formValues.nameBn,
       address: formValues.address,
       mobile: formValues.mobile,
       jomirPoriman: formValues.jomirPoriman,
@@ -841,6 +966,7 @@ export default function App() {
       expireDate: formValues.expireDate,
       pwrBalance: parseFloat(formValues.pwrBalance),
       chukirdharirName: formValues.chukirdharirName,
+      chukirdharirNameBn: formValues.chukirdharirNameBn,
       isActive: editingUser ? editingUser.isActive : true,
       withdrawals: editingUser ? (editingUser.withdrawals || []) : [],
       terms: formValues.terms || '',
@@ -856,16 +982,18 @@ export default function App() {
       }
       playSound('success');
       setIsSuccess(true);
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 3000));
       setIsSuccess(false);
       setIsProcessing(false);
       setShowAddEditModal(false);
       setEditingUser(null);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'users');
+      setErrorMessage(getFriendlyErrorMessage(error));
       setIsError(true);
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      await new Promise(resolve => setTimeout(resolve, 5000));
       setIsError(false);
+      setErrorMessage('');
       setIsProcessing(false);
     }
   };
@@ -877,15 +1005,17 @@ export default function App() {
     try {
       await deleteDoc(doc(db, 'users', id));
       setIsSuccess(true);
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 3000));
       setIsSuccess(false);
       setShowDeleteModal(false);
       setUserToDelete(null);
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `users/${id}`);
+      setErrorMessage(getFriendlyErrorMessage(error));
       setIsError(true);
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      await new Promise(resolve => setTimeout(resolve, 5000));
       setIsError(false);
+      setErrorMessage('');
     } finally {
       setIsProcessing(false);
     }
@@ -929,19 +1059,18 @@ export default function App() {
       playSound('success');
       speak("টাকা সংগ্রহ ও মেয়াদ বৃদ্ধি সফল হয়েছে", isMuted, isSpeechEnabled);
       setIsSuccess(true);
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 3000));
       setIsSuccess(false);
       setIsProcessing(false);
       setShowCollectionModal(false);
       setCollectingUser(null);
-      setExtendMonths('');
-      setCollectionAmount('');
-      alert(`✅ টাকা সংগ্রহ ও মেয়াদ বৃদ্ধি সম্পন্ন!\n\nসংগ্রহ: ${toBn(cost.toLocaleString())} টাকা\nমেয়াদ বৃদ্ধি: ${toBn(months)} মাস`);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `users/${collectingUser.id}`);
+      setErrorMessage(getFriendlyErrorMessage(error));
       setIsError(true);
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      await new Promise(resolve => setTimeout(resolve, 5000));
       setIsError(false);
+      setErrorMessage('');
       setIsProcessing(false);
     }
   };
@@ -972,9 +1101,11 @@ export default function App() {
       setIsSuccess(false);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `users/${user.id}`);
+      setErrorMessage(getFriendlyErrorMessage(error));
       setIsError(true);
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 3000));
       setIsError(false);
+      setErrorMessage('');
     } finally {
       setIsProcessing(false);
     }
@@ -1038,19 +1169,18 @@ export default function App() {
       playSound('success');
       speak(withdrawMode === 'withdraw' ? "টাকা উত্তোলন সফল হয়েছে" : "টাকা বৃদ্ধি সফল হয়েছে", isMuted, isSpeechEnabled);
       setIsSuccess(true);
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 3000));
       setIsSuccess(false);
       setIsProcessing(false);
       setShowWithdrawModal(false);
       setWithdrawingUser(null);
-      setWithdrawAmount('');
-      setWithdrawPurpose('');
-      alert(`✅ টাকা ${withdrawMode === 'withdraw' ? 'উত্তোলন' : 'যোগ'} সম্পন্ন!\n\nপরিমাণ: ${toBn(amountToProcess.toLocaleString())} টাকা`);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `users/${withdrawingUser.id}`);
+      setErrorMessage(getFriendlyErrorMessage(error));
       setIsError(true);
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      await new Promise(resolve => setTimeout(resolve, 5000));
       setIsError(false);
+      setErrorMessage('');
       setIsProcessing(false);
     }
   };
@@ -1125,9 +1255,11 @@ export default function App() {
       await new Promise(resolve => setTimeout(resolve, 5000));
       setIsSuccess(false);
     } catch (error) {
+      setErrorMessage(getFriendlyErrorMessage(error));
       setIsError(true);
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      await new Promise(resolve => setTimeout(resolve, 5000));
       setIsError(false);
+      setErrorMessage('');
     } finally {
       setIsProcessing(false);
     }
@@ -1145,6 +1277,20 @@ export default function App() {
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px]">
+        <AnimatePresence>
+          {isProcessing && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[200] flex items-center justify-center pointer-events-none"
+            >
+               <div className="pointer-events-auto">
+                 <ActionSpinner isSuccess={isSuccess} isError={isError} errorMessage={errorMessage} />
+               </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1169,8 +1315,12 @@ export default function App() {
                 await new Promise(resolve => setTimeout(resolve, 2000));
                 setIsSuccess(false);
               } catch (error: any) {
-                console.error("Login failed:", error);
-                alert(`Login failed: ${error.message || 'Unknown error'}. Please ensure this domain is added to Firebase Authorized Domains.`);
+                const message = getFriendlyErrorMessage(error);
+                setErrorMessage(message);
+                setIsError(true);
+                await new Promise(resolve => setTimeout(resolve, 5000));
+                setIsError(false);
+                setErrorMessage('');
               } finally {
                 setIsProcessing(false);
               }
@@ -1183,7 +1333,7 @@ export default function App() {
             ) : (
               <LogIn className="w-4 h-4" />
             )}
-            {isProcessing ? 'Signing In...' : 'Sign In with Google'}
+            {isProcessing ? 'লগইন হচ্ছে...' : 'Google দিয়ে লগইন করুন'}
           </button>
           
           <p className="mt-8 text-[8px] font-bold text-slate-300 uppercase tracking-widest">Protected by Firebase Security</p>
@@ -1203,7 +1353,7 @@ export default function App() {
             className="fixed inset-0 z-[200] flex items-center justify-center pointer-events-none"
           >
              <div className="pointer-events-auto">
-               <ActionSpinner isSuccess={isSuccess} isError={isError} />
+               <ActionSpinner isSuccess={isSuccess} isError={isError} errorMessage={errorMessage} />
              </div>
           </motion.div>
         )}
@@ -1243,7 +1393,7 @@ export default function App() {
           ].map((item) => (
             <motion.button
               key={item.id}
-              whileHover={{ x: 5, backgroundColor: "var(--color-slate-50)" }}
+              whileHover={{ x: 5, backgroundColor: "#f8fafc" }}
               whileTap={{ scale: 0.98 }}
               onClick={() => {
                 setFilter(item.id as StatusFilter);
@@ -1262,7 +1412,7 @@ export default function App() {
           ))}
 
           <motion.button
-            whileHover={{ x: 5, backgroundColor: "var(--color-slate-50)" }}
+            whileHover={{ x: 5, backgroundColor: "#f8fafc" }}
             whileTap={{ scale: 0.98 }}
             onClick={() => {
               setShowReportsModal(true);
@@ -1276,7 +1426,7 @@ export default function App() {
           
           <div className="pt-8 border-t border-slate-50 mt-8">
             <motion.button
-              whileHover={{ backgroundColor: "var(--color-rose-50)" }}
+              whileHover={{ backgroundColor: "#fff1f2" }}
               whileTap={{ scale: 0.98 }}
               onClick={() => {
                 handleLogout();
@@ -1302,9 +1452,9 @@ export default function App() {
                 <div className="flex items-center gap-2 mt-1.5 overflow-hidden">
                   <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest truncate hidden sm:block">চুক্তি ও পাওয়ার ব্যালেন্স ট্র্যাকিং</p>
                   <span className="w-1 h-1 bg-slate-200 rounded-full hidden sm:block"></span>
-              <p className="text-bkash text-[10px] font-black uppercase tracking-widest flex items-center gap-1 shrink-0">
+              <div className="text-bkash text-[10px] font-black uppercase tracking-widest flex items-center gap-1 shrink-0">
                 <Clock className="w-3 h-3" /> {liveTime.toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-              </p>
+              </div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -1576,6 +1726,9 @@ export default function App() {
                               <h4 className="font-extrabold text-slate-800 uppercase tracking-tight text-[10px] truncate max-w-[170px]">
                                 {user.name}
                               </h4>
+                              {user.nameBn && (
+                                <p className="text-[8px] font-bold text-slate-400 truncate leading-none mt-0.5">{user.nameBn}</p>
+                              )}
                               <div className="flex items-center gap-1.5 text-[9px] text-bkash font-black tracking-widest mt-0.5">
                                 <Phone className="w-2.5 h-2.5 shrink-0" />
                                 <span>{toBn(user.mobile)}</span>
@@ -1589,15 +1742,15 @@ export default function App() {
 
                         <div className="grid grid-cols-2 gap-3 mb-4 p-3 bg-slate-50/50 rounded-xl border border-slate-100/50">
                           <div>
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5 flex items-center gap-1">
+                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5 flex items-center gap-1">
                               <MapPin className="w-2.5 h-2.5 text-bkash" /> ঠিকানা
-                            </p>
+                            </div>
                             <p className="text-[10px] font-bold text-slate-600 truncate">{user.address}</p>
                           </div>
                           <div className="flex flex-col gap-1">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5 flex items-center gap-1">
+                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5 flex items-center gap-1">
                               <Calendar className="w-2.5 h-2.5 text-bkash" /> মেয়াদ শেষ
-                            </p>
+                            </div>
                             <div className="flex items-center gap-3">
                               <p className="text-[10px] font-black text-slate-800 leading-none">{formatDate(user.expireDate)}</p>
                               <div className="scale-[0.85] origin-left border-l border-slate-200 pl-3">
@@ -1743,9 +1896,14 @@ export default function App() {
                                 <td className="px-4 py-6">
                                   <div className="flex flex-col gap-1 max-w-[200px]">
                                     <div className="flex items-center gap-2">
-                                      <h4 className="font-extrabold text-slate-800 uppercase tracking-tight text-[9px] group-hover:text-bkash transition-colors truncate">
-                                        {user.name}
-                                      </h4>
+                                      <div className="flex flex-col">
+                                        <h4 className="font-extrabold text-slate-800 uppercase tracking-tight text-[9px] group-hover:text-bkash transition-colors truncate">
+                                          {user.name}
+                                        </h4>
+                                        {user.nameBn && (
+                                          <p className="text-[7px] font-bold text-slate-400 truncate leading-none mt-0.5">{user.nameBn}</p>
+                                        )}
+                                      </div>
                                       {!user.isActive && user.isActive !== undefined && (
                                         <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-[6px] font-black uppercase tracking-tighter shrink-0">বন্ধ</span>
                                       )}
@@ -1862,6 +2020,7 @@ export default function App() {
             playSound={playSound}
             isSuccess={isSuccess}
             isError={isError}
+            errorMessage={errorMessage}
           >
             <div className="text-center p-4">
               <div className="w-20 h-20 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -1895,7 +2054,7 @@ export default function App() {
                   )}
                 </motion.button>
                 <motion.button 
-                  whileHover={{ backgroundColor: "var(--color-slate-200)" }}
+                  whileHover={{ backgroundColor: "#e2e8f0" }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => {
                     setShowDeleteModal(false);
@@ -1918,6 +2077,7 @@ export default function App() {
             playSound={playSound}
             isSuccess={isSuccess}
             isError={isError}
+            errorMessage={errorMessage}
           >
             <AnimatePresence>
               {showRestorePrompt && (
@@ -1960,12 +2120,45 @@ export default function App() {
 
             <form onSubmit={handleAddEdit} className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
               <div className="space-y-1.5">
-                <label className="text-[8px] font-bold text-slate-400 uppercase flex items-center gap-1.5"><Users className="w-3 h-3" /> পূর্ণ নাম *</label>
-                <input name="name" required value={formValues.name} onChange={handleFormInputChange} placeholder="যেমন: মোঃ রহিম মিয়া" className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-[8px] font-bold" />
+                <div className="flex items-center justify-between">
+                  <label className="text-[8px] font-bold text-slate-400 uppercase flex items-center gap-1.5"><Users className="w-3 h-3" /> পূর্ণ নাম (English) *</label>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    type="button"
+                    onClick={() => handleTransliterate('name')}
+                    disabled={isTransliterating['name']}
+                    className="text-[7px] font-black text-bkash uppercase tracking-tighter bg-bkash-light/20 px-2 py-0.5 rounded-lg border border-bkash/5 disabled:opacity-50"
+                  >
+                    {isTransliterating['name'] ? 'Converting...' : 'Convert to বাংলা'}
+                  </motion.button>
+                </div>
+                <input name="name" required value={formValues.name} onChange={handleFormInputChange} placeholder="যেমন: Md. Rahim Mia" className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-[8px] font-bold" />
               </div>
               <div className="space-y-1.5">
-                <label className="text-[8px] font-bold text-slate-400 uppercase flex items-center gap-1.5"><UserCheck className="w-3 h-3" /> চুক্তিধারীর নাম *</label>
-                <input name="chukirdharirName" required value={formValues.chukirdharirName} onChange={handleFormInputChange} placeholder="যেমন: মোঃ শাহিন" className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-[8px] font-bold" />
+                <label className="text-[8px] font-bold text-slate-400 uppercase flex items-center gap-1.5"><Users className="w-3 h-3" /> পূর্ণ নাম (বাংলা) *</label>
+                <input name="nameBn" required value={formValues.nameBn} onChange={handleFormInputChange} placeholder="যেমন: মোঃ রহিম মিয়া" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-[8px] font-bold" />
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-[8px] font-bold text-slate-400 uppercase flex items-center gap-1.5"><UserCheck className="w-3 h-3" /> চুক্তিধারীর নাম (English) *</label>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    type="button"
+                    onClick={() => handleTransliterate('chukirdharirName')}
+                    disabled={isTransliterating['chukirdharirName']}
+                    className="text-[7px] font-black text-bkash uppercase tracking-tighter bg-bkash-light/20 px-2 py-0.5 rounded-lg border border-bkash/5 disabled:opacity-50"
+                  >
+                    {isTransliterating['chukirdharirName'] ? 'Converting...' : 'Convert to বাংলা'}
+                  </motion.button>
+                </div>
+                <input name="chukirdharirName" required value={formValues.chukirdharirName} onChange={handleFormInputChange} placeholder="যেমন: Md. Shahin" className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-[8px] font-bold" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[8px] font-bold text-slate-400 uppercase flex items-center gap-1.5"><UserCheck className="w-3 h-3" /> চুক্তিধারীর নাম (বাংলা) *</label>
+                <input name="chukirdharirNameBn" required value={formValues.chukirdharirNameBn} onChange={handleFormInputChange} placeholder="যেমন: মোঃ শাহিন" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-[8px] font-bold" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-[8px] font-bold text-slate-400 uppercase flex items-center gap-1.5"><Phone className="w-3 h-3" /> মোবাইল নম্বর *</label>
@@ -2010,7 +2203,7 @@ export default function App() {
                   )}
                 </motion.button>
                 <motion.button 
-                  whileHover={{ backgroundColor: "var(--color-slate-200)" }}
+                  whileHover={{ backgroundColor: "#e2e8f0" }}
                   whileTap={{ scale: 0.98 }}
                   type="button" 
                   disabled={isProcessing}
@@ -2032,6 +2225,7 @@ export default function App() {
             playSound={playSound}
             isSuccess={isSuccess}
             isError={isError}
+            errorMessage={errorMessage}
           >
               <div className="flex bg-slate-100 p-1.5 rounded-2xl mb-6 no-print">
                 {(['details', 'card', 'portfolio', 'receipt'] as const).map((mode) => (
@@ -2061,31 +2255,42 @@ export default function App() {
                         <Users className="w-8 h-8" />
                       </div>
                       <div>
-                        <h3 className="text-lg font-black text-slate-800">{viewingUser.name}</h3>
-                        <p className="text-slate-500 flex items-center gap-1.5 font-bold uppercase tracking-widest text-[8px] mt-1">
+                        <div className="flex flex-col">
+                          <h3 className="text-lg font-black text-slate-800">{viewingUser.name}</h3>
+                          {viewingUser.nameBn && (
+                            <p className="text-[10px] font-bold text-slate-400 leading-none">{viewingUser.nameBn}</p>
+                          )}
+                        </div>
+                        <div className="text-slate-500 flex items-center gap-1.5 font-bold uppercase tracking-widest text-[8px] mt-1">
                           <MapPin className="w-3.5 h-3.5 text-bkash" /> {viewingUser.address}
-                        </p>
+                        </div>
                       </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-6">
                       <div>
-                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5">মোবাইল নম্বর</p>
-                        <p className="font-bold text-slate-800 flex items-center gap-2">
+                        <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 text-left">মোবাইল নম্বর</div>
+                        <div className="font-bold text-slate-800 flex items-center gap-2">
                           <Phone className="w-4 h-4 text-bkash" /> {toBn(viewingUser.mobile)}
-                        </p>
+                        </div>
                       </div>
                       <div>
-                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5">জমির পরিমাণ</p>
-                        <p className="font-bold text-slate-800 flex items-center gap-2">
+                        <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 text-left">জমির পরিমাণ</div>
+                        <div className="font-bold text-slate-800 flex items-center gap-2">
                           <TreeDeciduous className="w-4 h-4 text-emerald-500" /> {toBn(viewingUser.jomirPoriman)}
-                        </p>
+                        </div>
                       </div>
                       <div>
                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5">চুক্তিধারীর নাম</p>
-                        <p className="font-bold text-slate-800 flex items-center gap-2 text-[8px]">
-                          <Handshake className="w-4 h-4 text-bkash" /> {viewingUser.chukirdharirName}
-                        </p>
+                        <div className="font-bold text-slate-800 flex items-center gap-2 text-[8px]">
+                          <Handshake className="w-4 h-4 text-bkash" /> 
+                          <div className="flex flex-col">
+                            <span>{viewingUser.chukirdharirName}</span>
+                            {viewingUser.chukirdharirNameBn && (
+                              <span className="text-[10px] text-slate-400 leading-none">{viewingUser.chukirdharirNameBn}</span>
+                            )}
+                          </div>
+                        </div>
                       </div>
                       <div>
                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5">চুক্তির টাকা</p>
@@ -2157,11 +2362,16 @@ export default function App() {
                   </div>
                   
                   <div className="space-y-4">
-                    <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight break-words border-l-4 border-bkash pl-3">{viewingUser.name}</h3>
+                    <div className="flex flex-col border-l-4 border-bkash pl-3">
+                      <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight break-words">{viewingUser.name}</h3>
+                      {viewingUser.nameBn && (
+                        <p className="text-[12px] font-bold text-slate-400 leading-none mt-1">{viewingUser.nameBn}</p>
+                      )}
+                    </div>
                     <div className="grid grid-cols-1 gap-3 pt-3 border-t border-slate-100">
                       {[
                         { label: 'মোবাইল', value: toBn(viewingUser.mobile) },
-                        { label: 'চুক্তিধারী', value: viewingUser.chukirdharirName },
+                        { label: 'চুক্তিধারী', value: viewingUser.chukirdharirName + (viewingUser.chukirdharirNameBn ? ` (${viewingUser.chukirdharirNameBn})` : '') },
                         { label: 'ঠিকানা', value: viewingUser.address },
                         { label: 'জমির পরিমাণ', value: toBn(viewingUser.jomirPoriman) + ' শতাংশ' },
                         { label: 'ব্যালেন্স', value: toBn(viewingUser.pwrBalance.toLocaleString()) + ' ৳' },
@@ -2228,8 +2438,8 @@ export default function App() {
                       
                       <div className="space-y-1 px-4">
                         {[
-                          { label: 'প্রথম পক্ষ (ইউজার)', value: viewingUser.name },
-                          { label: 'পিতার নাম / স্বামী', value: viewingUser.chukirdharirName || '---' },
+                          { label: 'প্রথম পক্ষ (ইউজার)', value: viewingUser.name + (viewingUser.nameBn ? ` (${viewingUser.nameBn})` : '') },
+                          { label: 'পিতার নাম / স্বামী', value: (viewingUser.chukirdharirName || '---') + (viewingUser.chukirdharirNameBn ? ` (${viewingUser.chukirdharirNameBn})` : '') },
                           { label: 'মোবাইল নম্বর', value: toBn(viewingUser.mobile) },
                           { label: 'ঠিকানা', value: viewingUser.address },
                         ].map((item) => (
@@ -2386,12 +2596,12 @@ export default function App() {
                     <div className="grid grid-cols-2 gap-4 md:gap-8">
                       <div>
                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">গ্রাহকের তথ্য</p>
-                        <h3 className="text-[10px] md:text-md font-black text-slate-900">{viewingUser.name}</h3>
+                        <h3 className="text-[10px] md:text-md font-black text-slate-900">{viewingUser.name} {viewingUser.nameBn && `(${viewingUser.nameBn})`}</h3>
                         <p className="text-[8px] md:text-[9px] font-bold text-slate-600">{viewingUser.address}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">চুক্তিধারী</p>
-                        <h3 className="text-[10px] md:text-md font-black text-slate-900">{viewingUser.chukirdharirName}</h3>
+                        <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">চুক্তিধারী</div>
+                        <h3 className="text-[10px] md:text-md font-black text-slate-900">{viewingUser.chukirdharirName} {viewingUser.chukirdharirNameBn && `(${viewingUser.chukirdharirNameBn})`}</h3>
                         <p className="text-[8px] md:text-[9px] font-bold text-slate-600">{toBn(viewingUser.mobile)}</p>
                       </div>
                     </div>
@@ -2479,7 +2689,7 @@ export default function App() {
                 <Download className="w-4 h-4" /> পিডিওএফ ডাউনলোড
               </motion.button>
               <motion.button 
-                whileHover={{ backgroundColor: "var(--color-slate-200)" }}
+                whileHover={{ backgroundColor: "#e2e8f0" }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => setShowViewModal(false)} 
                 className="flex-1 py-4.5 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all"
@@ -2498,6 +2708,7 @@ export default function App() {
             isSuccess={isSuccess}
             playSound={playSound}
             isError={isError}
+            errorMessage={errorMessage}
           >
             {/* User Info Header */}
             <div className="bg-slate-50 rounded-3xl p-6 mb-6 border border-slate-100">
@@ -2506,143 +2717,187 @@ export default function App() {
                   <Handshake className="w-7 h-7" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-md font-black text-slate-800 uppercase tracking-tight truncate">{collectingUser.name}</h3>
+                  <div className="flex flex-col">
+                    <h3 className="text-md font-black text-slate-800 uppercase tracking-tight truncate">{collectingUser.name}</h3>
+                    {collectingUser.nameBn && (
+                      <p className="text-[10px] font-bold text-slate-400 leading-none">{collectingUser.nameBn}</p>
+                    )}
+                  </div>
                   <div className="flex flex-wrap gap-x-4 gap-y-2 mt-2">
-                    <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <div className="text-[8px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
                       <MapPin className="w-3 h-3 text-bkash" /> {collectingUser.address}
-                    </p>
-                    <p className="text-[8px] font-black text-bkash uppercase tracking-widest flex items-center gap-1.5">
+                    </div>
+                    <div className="text-[8px] font-black text-bkash uppercase tracking-widest flex items-center gap-1.5">
                       <Phone className="w-3 h-3" /> {collectingUser.mobile}
-                    </p>
-                    <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-                      <Handshake className="w-3 h-3 text-bkash" /> {collectingUser.chukirdharirName}
-                    </p>
-                    <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                    </div>
+                    <div className="text-[8px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                      <Handshake className="w-3 h-3 text-bkash" /> 
+                      <div className="flex flex-col">
+                        <span>{collectingUser.chukirdharirName}</span>
+                        {collectingUser.chukirdharirNameBn && (
+                          <span className="text-[8px] text-slate-400 font-bold">{collectingUser.chukirdharirNameBn}</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-[8px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
                       <TreeDeciduous className="w-3 h-3 text-bkash" /> জমি: {collectingUser.jomirPoriman}
-                    </p>
-                    <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                    </div>
+                    <div className="text-[8px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
                       <Banknote className="w-3 h-3 text-bkash" /> চুক্তির পরিমাণ: {toBn(collectingUser.amount.toLocaleString())} ৳
-                    </p>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Detail cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-              <div className="bg-bkash-light border border-bkash/10 rounded-3xl p-6 flex flex-col items-center justify-center text-center">
-                <p className="text-[8px] font-black text-bkash uppercase tracking-widest mb-1">বর্তমান ব্যালেন্স</p>
-                <p className="text-xl font-black text-bkash">{toBn(collectingUser.pwrBalance.toLocaleString())} ৳</p>
-              </div>
-              <div className="bg-slate-50 border border-slate-100 rounded-3xl p-6 flex flex-col items-center justify-center text-center">
-                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">বর্তমান মেয়াদ</p>
-                <p className="text-md font-black text-slate-700">{formatDate(collectingUser.expireDate)}</p>
-              </div>
-            </div>
+            {isSuccess ? (
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="py-12 flex flex-col items-center justify-center text-center"
+              >
+                <div className="w-24 h-24 bg-emerald-500 rounded-full flex items-center justify-center mb-6 shadow-2xl shadow-emerald-200">
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: "spring", damping: 12, stiffness: 200, delay: 0.2 }}
+                  >
+                    <Check className="w-12 h-12 text-white" strokeWidth={4} />
+                  </motion.div>
+                </div>
+                <h3 className="text-2xl font-black text-slate-800 mb-2">সংগ্রহ সফল হয়েছে!</h3>
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed max-w-[280px]">
+                  গ্রাহক {collectingUser.name} এর নিকট হইতে {toBn(collectionAmount)} টাকা সফলভাবে সংগৃহীত হইয়াছে।
+                </div>
+                <div className="mt-8 p-4 bg-emerald-50 rounded-2xl border border-emerald-100 w-full">
+                  <div className="flex justify-between text-[10px] mb-2 font-bold text-slate-500 uppercase tracking-widest">
+                    <span>সংগৃহীত টাকা</span>
+                    <span className="text-emerald-600 font-black">{toBn(collectionAmount)} ৳</span>
+                  </div>
+                  <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                    <span>নতুন ব্যালেন্স</span>
+                    <span className="text-bkash font-black">{toBn((collectingUser.pwrBalance - parseFloat(collectionAmount)).toLocaleString())} ৳</span>
+                  </div>
+                </div>
+              </motion.div>
+            ) : (
+              <>
+                {/* Detail cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                  <div className="bg-bkash-light border border-bkash/10 rounded-3xl p-6 flex flex-col items-center justify-center text-center">
+                    <div className="text-[8px] font-black text-bkash uppercase tracking-widest mb-1">বর্তমান ব্যালেন্স</div>
+                    <div className="text-xl font-black text-bkash">{toBn(collectingUser.pwrBalance.toLocaleString())} ৳</div>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-100 rounded-3xl p-6 flex flex-col items-center justify-center text-center">
+                    <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">বর্তমান মেয়াদ</div>
+                    <div className="text-md font-black text-slate-700">{formatDate(collectingUser.expireDate)}</div>
+                  </div>
+                </div>
 
-            <div className="space-y-5">
-              <div className="space-y-2">
-                <label className="text-[8px] font-black text-slate-500 uppercase flex items-center justify-center sm:justify-start gap-2 tracking-widest"><Calendar className="w-4 h-4 text-bkash" /> কত মাস মেয়াদ বাড়াবেন? *</label>
-                <input 
-                  type="number" 
-                  value={extendMonths}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setExtendMonths(val);
-                    const months = parseInt(val);
-                    if (!isNaN(months) && months > 0) {
-                      setCollectionAmount((months * 1000).toString());
-                    } else {
-                      setCollectionAmount('');
-                    }
-                  }}
-                  placeholder="মাস সংখ্যা লিখুন (যেমন: 3)" 
-                  className="w-full px-6 py-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-md font-black text-slate-800 text-center sm:text-left" 
-                />
-                <p className="text-[8px] font-black text-amber-600 flex items-center justify-center sm:justify-start gap-1 px-1 uppercase tracking-tighter">
-                  <AlertTriangle className="w-3 h-3" /> প্রতিটি মাসের জন্য ১০০০ টাকা চার্জ (পরিবর্তনযোগ্য)
-                </p>
-              </div>
-
-              <div className="space-y-2 text-center sm:text-left">
-                <label className="text-[8px] font-black text-slate-500 uppercase flex items-center justify-center sm:justify-start gap-2 tracking-widest"><TrendingUp className="w-4 h-4 text-emerald-500" /> সংগ্রহের পরিমাণ (টাকা) *</label>
-                <input 
-                  type="number" 
-                  value={collectionAmount}
-                  onChange={(e) => setCollectionAmount(e.target.value)}
-                  placeholder="চার্জের পরিমাণ লিখুন" 
-                  className="w-full px-6 py-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-md font-black text-emerald-600 text-center sm:text-left" 
-                />
-              </div>
-
-              <div className="space-y-2 text-center sm:text-left">
-                <label className="text-[8px] font-black text-slate-500 uppercase flex items-center justify-center sm:justify-start gap-2 tracking-widest"><FileText className="w-4 h-4 text-slate-400" /> বিশেষ শর্তাবলি (যদি থাকে)</label>
-                <textarea 
-                  value={collectionTerms}
-                  onChange={(e) => setCollectionTerms(e.target.value)}
-                  placeholder="এই কিস্তির জন্য কোনো বিশেষ শর্ত থাকলে তা লিখুন..." 
-                  className="w-full px-6 py-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-[10px] font-bold text-slate-700 min-h-[80px] resize-none" 
-                />
-              </div>
-
-              {/* Summary / Preview */}
-              {extendMonths && collectionAmount && !isNaN(parseInt(extendMonths)) && !isNaN(parseFloat(collectionAmount)) && (
-                <motion.div 
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="bg-emerald-50 border border-emerald-100 rounded-3xl p-5"
-                >
-                  <h4 className="text-[9px] font-black text-emerald-700 uppercase tracking-widest mb-3 flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4" /> ট্রানজেকশন প্রিভিউ
-                  </h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-[8px] font-bold text-emerald-600 uppercase">অবশিষ্ট ব্যালেন্স</p>
-                      <p className="text-sm font-black text-emerald-800">{toBn((collectingUser.pwrBalance - parseFloat(collectionAmount)).toLocaleString())} ৳</p>
-                    </div>
-                    <div>
-                      <p className="text-[8px] font-bold text-emerald-600 uppercase">নতুন মেয়াদ</p>
-                      <p className="text-sm font-black text-emerald-800">
-                        {(() => {
-                           const d = new Date(collectingUser.expireDate);
-                           d.setMonth(d.getMonth() + parseInt(extendMonths));
-                           return formatDate(d.toISOString().split('T')[0]);
-                        })()}
-                      </p>
+                <div className="space-y-5">
+                  <div className="space-y-2">
+                    <label className="text-[8px] font-black text-slate-500 uppercase flex items-center justify-center sm:justify-start gap-2 tracking-widest"><Calendar className="w-4 h-4 text-bkash" /> কত মাস মেয়াদ বাড়াবেন? *</label>
+                    <input 
+                      type="number" 
+                      value={extendMonths}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setExtendMonths(val);
+                        const months = parseInt(val);
+                        if (!isNaN(months) && months > 0) {
+                          setCollectionAmount((months * 1000).toString());
+                        } else {
+                          setCollectionAmount('');
+                        }
+                      }}
+                      placeholder="মাস সংখ্যা লিখুন (যেমন: 3)" 
+                      className="w-full px-6 py-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-md font-black text-slate-800 text-center sm:text-left" 
+                    />
+                    <div className="text-[8px] font-black text-amber-600 flex items-center justify-center sm:justify-start gap-1 px-1 uppercase tracking-tighter">
+                      <AlertTriangle className="w-3 h-3" /> প্রতিটি মাসের জন্য ১০০০ টাকা চার্জ (পরিবর্তনযোগ্য)
                     </div>
                   </div>
-                </motion.div>
-              )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
-                <motion.button 
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={processCollection}
-                  disabled={isProcessing}
-                  className="py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  {isProcessing ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      প্রসেসিং হচ্ছে...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="w-4 h-4" /> সংগ্রহ সম্পন্ন করুন
-                    </>
+                  <div className="space-y-2 text-center sm:text-left">
+                    <label className="text-[8px] font-black text-slate-500 uppercase flex items-center justify-center sm:justify-start gap-2 tracking-widest"><TrendingUp className="w-4 h-4 text-emerald-500" /> সংগ্রহের পরিমাণ (টাকা) *</label>
+                    <input 
+                      type="number" 
+                      value={collectionAmount}
+                      onChange={(e) => setCollectionAmount(e.target.value)}
+                      placeholder="চার্জের পরিমাণ লিখুন" 
+                      className="w-full px-6 py-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-md font-black text-emerald-600 text-center sm:text-left" 
+                    />
+                  </div>
+
+                  <div className="space-y-2 text-center sm:text-left">
+                    <label className="text-[8px] font-black text-slate-500 uppercase flex items-center justify-center sm:justify-start gap-2 tracking-widest"><FileText className="w-4 h-4 text-slate-400" /> বিশেষ শর্তাবলি (যদি থাকে)</label>
+                    <textarea 
+                      value={collectionTerms}
+                      onChange={(e) => setCollectionTerms(e.target.value)}
+                      placeholder="এই কিস্তির জন্য কোনো বিশেষ শর্ত থাকলে তা লিখুন..." 
+                      className="w-full px-6 py-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-[10px] font-bold text-slate-700 min-h-[80px] resize-none" 
+                    />
+                  </div>
+
+                  {/* Summary / Preview */}
+                  {extendMonths && collectionAmount && !isNaN(parseInt(extendMonths)) && !isNaN(parseFloat(collectionAmount)) && (
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="bg-emerald-50 border border-emerald-100 rounded-3xl p-5"
+                    >
+                      <h4 className="text-[9px] font-black text-emerald-700 uppercase tracking-widest mb-3 flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4" /> ট্রানজেকশন প্রিভিউ
+                      </h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-[8px] font-bold text-emerald-600 uppercase">অবশিষ্ট ব্যালেন্স</p>
+                          <p className="text-sm font-black text-emerald-800">{toBn((collectingUser.pwrBalance - parseFloat(collectionAmount)).toLocaleString())} ৳</p>
+                        </div>
+                        <div>
+                          <p className="text-[8px] font-bold text-emerald-600 uppercase">নতুন মেয়াদ</p>
+                          <p className="text-sm font-black text-emerald-800">
+                            {(() => {
+                               const d = new Date(collectingUser.expireDate);
+                               d.setMonth(d.getMonth() + parseInt(extendMonths));
+                               return formatDate(d.toISOString().split('T')[0]);
+                            })()}
+                          </p>
+                        </div>
+                      </div>
+                    </motion.div>
                   )}
-                </motion.button>
-                <motion.button 
-                  whileHover={{ backgroundColor: "var(--color-slate-200)" }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => setShowCollectionModal(false)}
-                  disabled={isProcessing}
-                  className="py-4 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] transition-all disabled:opacity-50"
-                >
-                  বাতিল করুন
-                </motion.button>
-              </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
+                    <motion.button 
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={processCollection}
+                      disabled={isProcessing}
+                      className="py-4 bg-emerald-600 text-white rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {isProcessing ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          প্রসেসিং হচ্ছে...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-4 h-4" /> সংগ্রহ সম্পন্ন করুন
+                        </>
+                      )}
+                    </motion.button>
+                    <motion.button 
+                      whileHover={{ backgroundColor: "#e2e8f0" }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setShowCollectionModal(false)}
+                      disabled={isProcessing}
+                      className="py-4 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] transition-all disabled:opacity-50"
+                    >
+                      বাতিল করুন
+                    </motion.button>
+                  </div>
+                </div>
 
               {/* Improved Collection History Section */}
               <div className="mt-8 pt-8 border-t border-slate-100">
@@ -2653,7 +2908,7 @@ export default function App() {
                     </div>
                     <div>
                       <h3 className="text-[8px] font-black text-slate-800 uppercase tracking-widest">লেনদেনের ইতিহাস</h3>
-                      <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">পূববর্তী সংগ্রহের রেকর্ডসমূহ</p>
+                      <div className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">পূববর্তী সংগ্রহের রেকর্ডসমূহ</div>
                     </div>
                   </div>
                   <div className="px-3 py-1 bg-slate-50 rounded-lg border border-slate-100">
@@ -2677,23 +2932,23 @@ export default function App() {
                               <Calendar className="w-5 h-5" />
                             </div>
                             <div>
-                              <p className="text-[8px] font-black text-slate-800">{formatDate(item.date)}</p>
-                              <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">সংগ্রহের তারিখ</p>
+                               <div className="text-[8px] font-black text-slate-800">{formatDate(item.date)}</div>
+                               <div className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">সংগ্রহের তারিখ</div>
                             </div>
                           </div>
                           
                           <div className="grid grid-cols-3 gap-4 sm:gap-8">
                             <div className="text-center sm:text-right">
-                              <p className="text-[8px] font-black text-emerald-600">{item.amount.toLocaleString()} ৳</p>
-                              <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">টাকা</p>
+                              <div className="text-[8px] font-black text-emerald-600">{item.amount.toLocaleString()} ৳</div>
+                              <div className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">টাকা</div>
                             </div>
                             <div className="text-center sm:text-right">
-                              <p className="text-[8px] font-black text-bkash">+{item.monthsExtended} মাস</p>
-                              <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">বর্ধিত</p>
+                              <div className="text-[8px] font-black text-bkash">+{item.monthsExtended} মাস</div>
+                              <div className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">বর্ধিত</div>
                             </div>
                             <div className="text-center sm:text-right">
-                              <p className="text-[8px] font-black text-slate-700">{formatDate(item.newExpiryDate)}</p>
-                              <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">নতুন মেয়াদ</p>
+                              <div className="text-[8px] font-black text-slate-700">{formatDate(item.newExpiryDate)}</div>
+                              <div className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">নতুন মেয়াদ</div>
                             </div>
                           </div>
                         </div>
@@ -2704,12 +2959,13 @@ export default function App() {
                       <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center mx-auto mb-4 text-slate-200 border border-slate-100">
                         <History className="w-6 h-6" />
                       </div>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">কোনো লেনদেনের ইতিহাস পাওয়া যায়নি</p>
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">কোনো লেনদেনের ইতিহাস পাওয়া যায়নি</div>
                     </div>
                   )}
                 </div>
               </div>
-            </div>
+            </>
+            )}
           </Modal>
         )}
 
@@ -2721,6 +2977,7 @@ export default function App() {
             playSound={playSound}
             isSuccess={isSuccess}
             isError={isError}
+            errorMessage={errorMessage}
           >
             <div className="bg-slate-50 rounded-3xl p-6 mb-6 border border-slate-100">
               <div className="flex items-center gap-4">
@@ -2730,171 +2987,209 @@ export default function App() {
                   {withdrawMode === 'withdraw' ? <ArrowUpCircle className="w-7 h-7" /> : <TrendingUp className="w-7 h-7" />}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-md font-black text-slate-800 uppercase tracking-tight truncate">{withdrawingUser.name}</h3>
+                  <div className="flex flex-col">
+                    <h3 className="text-md font-black text-slate-800 uppercase tracking-tight truncate">{withdrawingUser.name}</h3>
+                    {withdrawingUser.nameBn && (
+                      <p className="text-[10px] font-bold text-slate-400 leading-none">{withdrawingUser.nameBn}</p>
+                    )}
+                  </div>
                   <div className="flex flex-wrap gap-x-4 gap-y-2 mt-2">
-                    <p className="text-[8px] font-black text-bkash uppercase tracking-widest flex items-center gap-1.5">
+                    <div className="text-[8px] font-black text-bkash uppercase tracking-widest flex items-center gap-1.5">
                       <Phone className="w-3 h-3" /> {withdrawingUser.mobile}
-                    </p>
-                    <p className="text-[8px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                    </div>
+                    <div className="text-[8px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
                       <Banknote className="w-3 h-3 text-bkash" /> বর্তমান ব্যালেন্স: {toBn(withdrawingUser.pwrBalance.toLocaleString())} ৳
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Mode Toggle */}
-            <div className="flex bg-slate-100 p-1 rounded-2xl mb-6">
-              <button 
-                onClick={() => {
-                  setWithdrawMode('withdraw');
-                  playSound('click');
-                }}
-                className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${
-                  withdrawMode === 'withdraw' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'
-                }`}
-              >
-                টাকা উত্তোলন
-              </button>
-              <button 
-                onClick={() => {
-                  setWithdrawMode('add');
-                  playSound('click');
-                }}
-                className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${
-                  withdrawMode === 'add' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'
-                }`}
-              >
-                টাকা বাড়ানো
-              </button>
-            </div>
-
-            <div className="space-y-5">
-              <div className="space-y-2">
-                <label className="text-[8px] font-black text-slate-500 uppercase flex items-center gap-2 tracking-widest">
-                  {withdrawMode === 'withdraw' ? <Banknote className="w-4 h-4 text-blue-500" /> : <TrendingUp className="w-4 h-4 text-emerald-500" />}
-                  {withdrawMode === 'withdraw' ? 'উত্তোলনের পরিমাণ (টাকা) *' : 'বৃদ্ধির পরিমাণ (টাকা) *'}
-                </label>
-                <input 
-                  type="number" 
-                  value={withdrawAmount}
-                  onChange={(e) => setWithdrawAmount(e.target.value)}
-                  placeholder="টাকার পরিমাণ লিখুন" 
-                  className={`w-full px-6 py-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:bg-white focus:ring-4 outline-none transition-all text-md font-black ${
-                    withdrawMode === 'withdraw' ? 'focus:border-blue-600 focus:ring-blue-600/10 text-blue-600' : 'focus:border-emerald-600 focus:ring-emerald-600/10 text-emerald-600'
-                  }`} 
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[8px] font-black text-slate-500 uppercase flex items-center gap-2 tracking-widest">
-                  <FileText className="w-4 h-4 text-slate-400" /> {withdrawMode === 'withdraw' ? 'উত্তোলনের কারণ / উদ্দেশ্য *' : 'বৃদ্ধির কারণ / নোট *'}
-                </label>
-                <textarea 
-                  value={withdrawPurpose}
-                  onChange={(e) => setWithdrawPurpose(e.target.value)}
-                  placeholder={withdrawMode === 'withdraw' ? "কেন টাকা উত্তোলন করা হচ্ছে তা লিখুন..." : "কেন টাকা বৃদ্ধি করা হচ্ছে বা কোনো নোট থাকলে লিখুন..."}
-                  className={`w-full px-6 py-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:bg-white focus:ring-4 outline-none transition-all text-[10px] font-bold text-slate-700 min-h-[100px] resize-none ${
-                    withdrawMode === 'withdraw' ? 'focus:border-blue-600 focus:ring-blue-600/10' : 'focus:border-emerald-600 focus:ring-emerald-600/10'
-                  }`}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
-                <motion.button 
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={processWithdrawal}
-                  disabled={isProcessing}
-                  className={`py-4 text-white rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2 ${
-                    withdrawMode === 'withdraw' ? 'bg-blue-600 shadow-blue-100 hover:bg-blue-700' : 'bg-emerald-600 shadow-emerald-100 hover:bg-emerald-700'
-                  }`}
-                >
-                  {isProcessing ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      প্রসেসিং...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="w-4 h-4" /> {withdrawMode === 'withdraw' ? 'উত্তোলন সম্পন্ন করুন' : 'বৃদ্ধি সম্পন্ন করুন'}
-                    </>
-                  )}
-                </motion.button>
-                <motion.button 
-                  whileHover={{ backgroundColor: "var(--color-slate-200)" }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => setShowWithdrawModal(false)}
-                  disabled={isProcessing}
-                  className="py-4 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] transition-all disabled:opacity-50"
-                >
-                  বাতিল করুন
-                </motion.button>
-              </div>
-
-              {/* Transaction History Section in Withdraw Modal */}
-              <div className="mt-8 pt-8 border-t border-slate-100">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-400">
-                      <History className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h3 className="text-[8px] font-black text-slate-800 uppercase tracking-widest">লেনদেনের ইতিহাস</h3>
-                      <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">উত্তোলন ও জমার রেকর্ডসমূহ</p>
                     </div>
                   </div>
                 </div>
-
-                <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                  {/* Combine both collections and withdrawals for a full history view */}
-                  {(() => {
-                    const fullHistory = [
-                      ...(withdrawingUser.withdrawals || []).map(w => ({ ...w, type: 'withdraw' as const })),
-                      ...(withdrawingUser.history || []).map(h => ({ ...h, type: 'add' as const, purpose: (h as any).purpose || 'কিস্তি / জমা' }))
-                    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-                    if (fullHistory.length === 0) {
-                      return (
-                        <div className="bg-slate-50/50 rounded-3xl p-10 text-center border-2 border-dashed border-slate-100">
-                          <p className="text-[8px] font-bold text-slate-400 uppercase tracking-[0.2em]">কোনো লেনদেনের ইতিহাস পাওয়া যায়নি</p>
-                        </div>
-                      );
-                    }
-
-                    return fullHistory.map((item, idx) => (
-                      <motion.div 
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: idx * 0.03 }}
-                        key={`hist-withdraw-modal-${idx}`} 
-                        className="bg-white rounded-2xl p-4 border border-slate-100 flex justify-between items-center group hover:shadow-md transition-all"
-                      >
-                        <div className="flex items-center gap-4">
-                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                            item.type === 'withdraw' ? 'bg-rose-50 text-rose-500' : 'bg-emerald-50 text-emerald-500'
-                          }`}>
-                            {item.type === 'withdraw' ? <ArrowDownCircle className="w-5 h-5" /> : <ArrowUpCircle className="w-5 h-5" />}
-                          </div>
-                          <div>
-                            <p className="text-[8px] font-black text-slate-800">{formatDate(item.date)}</p>
-                            <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest truncate max-w-[150px]">{item.purpose}</p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className={`text-[9px] font-black ${item.type === 'withdraw' ? 'text-rose-600' : 'text-emerald-600'}`}>
-                            {item.type === 'withdraw' ? '-' : '+'}{toBn(item.amount.toLocaleString())} ৳
-                          </p>
-                          <p className="text-[7px] font-bold text-slate-400 uppercase tracking-widest">
-                            {item.type === 'withdraw' ? 'উত্তোলন' : 'জমা / বৃদ্ধি'}
-                          </p>
-                        </div>
-                      </motion.div>
-                    ));
-                  })()}
-                </div>
               </div>
             </div>
+
+            {isSuccess ? (
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="py-12 flex flex-col items-center justify-center text-center"
+              >
+                <div className={`w-24 h-24 ${withdrawMode === 'withdraw' ? 'bg-blue-500 shadow-blue-200' : 'bg-emerald-500 shadow-emerald-200'} rounded-full flex items-center justify-center mb-6 shadow-2xl transition-colors`}>
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: "spring", damping: 12, stiffness: 200, delay: 0.2 }}
+                  >
+                    <Check className="w-12 h-12 text-white" strokeWidth={4} />
+                  </motion.div>
+                </div>
+                <h3 className="text-2xl font-black text-slate-800 mb-2">{withdrawMode === 'withdraw' ? 'উত্তোলন সফল হয়েছে!' : 'বৃদ্ধি সফল হয়েছে!'}</h3>
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-relaxed max-w-[280px]">
+                  গ্রাহক {withdrawingUser.name} এর {withdrawMode === 'withdraw' ? 'উত্তোলন' : 'বৃদ্ধি'} অনুরোধ সফলভাবে সম্পন্ন হইয়াছে।
+                </div>
+                <div className={`mt-8 p-4 ${withdrawMode === 'withdraw' ? 'bg-blue-50 border-blue-100' : 'bg-emerald-50 border-emerald-100'} rounded-2xl border w-full`}>
+                  <div className="flex justify-between text-[10px] mb-2 font-bold text-slate-500 uppercase tracking-widest">
+                    <span>পরিমাণ</span>
+                    <span className={`${withdrawMode === 'withdraw' ? 'text-blue-600' : 'text-emerald-600'} font-black`}>{toBn(withdrawAmount)} ৳</span>
+                  </div>
+                  <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                    <span>নতুন ব্যালেন্স</span>
+                    <span className="text-bkash font-black">{toBn((withdrawMode === 'withdraw' ? withdrawingUser.pwrBalance - parseFloat(withdrawAmount) : withdrawingUser.pwrBalance + parseFloat(withdrawAmount)).toLocaleString())} ৳</span>
+                  </div>
+                </div>
+              </motion.div>
+            ) : (
+              <>
+                <div className="flex bg-slate-100 p-1 rounded-2xl mb-6">
+                  <button 
+                    onClick={() => {
+                      setWithdrawMode('withdraw');
+                      playSound('click');
+                    }}
+                    className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${
+                      withdrawMode === 'withdraw' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+                    }`}
+                  >
+                    টাকা উত্তোলন
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setWithdrawMode('add');
+                      playSound('click');
+                    }}
+                    className={`flex-1 py-3 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all ${
+                      withdrawMode === 'add' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+                    }`}
+                  >
+                    টাকা বাড়ানো
+                  </button>
+                </div>
+
+                <div className="space-y-5">
+                  <div className="space-y-2">
+                    <label className="text-[8px] font-black text-slate-500 uppercase flex items-center gap-2 tracking-widest">
+                      {withdrawMode === 'withdraw' ? <Banknote className="w-4 h-4 text-blue-500" /> : <TrendingUp className="w-4 h-4 text-emerald-500" />}
+                      {withdrawMode === 'withdraw' ? 'উত্তোলনের পরিমাণ (টাকা) *' : 'বৃদ্ধির পরিমাণ (টাকা) *'}
+                    </label>
+                    <input 
+                      type="number" 
+                      value={withdrawAmount}
+                      onChange={(e) => setWithdrawAmount(e.target.value)}
+                      placeholder="টাকার পরিমাণ লিখুন" 
+                      className={`w-full px-6 py-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:bg-white focus:ring-4 outline-none transition-all text-md font-black ${
+                        withdrawMode === 'withdraw' ? 'focus:border-blue-600 focus:ring-blue-600/10 text-blue-600' : 'focus:border-emerald-600 focus:ring-emerald-600/10 text-emerald-600'
+                      }`} 
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[8px] font-black text-slate-500 uppercase flex items-center gap-2 tracking-widest">
+                      <FileText className="w-4 h-4 text-slate-400" /> {withdrawMode === 'withdraw' ? 'উত্তোলনের কারণ / উদ্দেশ্য *' : 'বৃদ্ধির কারণ / নোট *'}
+                    </label>
+                    <textarea 
+                      value={withdrawPurpose}
+                      onChange={(e) => setWithdrawPurpose(e.target.value)}
+                      placeholder={withdrawMode === 'withdraw' ? "কেন টাকা উত্তোলন করা হচ্ছে তা লিখুন..." : "কেন টাকা বৃদ্ধি করা হচ্ছে বা কোনো নোট থাকলে লিখুন..."}
+                      className={`w-full px-6 py-4 rounded-2xl bg-slate-50 border-2 border-transparent focus:bg-white focus:ring-4 outline-none transition-all text-[10px] font-bold text-slate-700 min-h-[100px] resize-none ${
+                        withdrawMode === 'withdraw' ? 'focus:border-blue-600 focus:ring-blue-600/10' : 'focus:border-emerald-600 focus:ring-emerald-600/10'
+                      }`}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
+                    <motion.button 
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={processWithdrawal}
+                      disabled={isProcessing}
+                      className={`py-4 text-white rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2 ${
+                        withdrawMode === 'withdraw' ? 'bg-blue-600 shadow-blue-100 hover:bg-blue-700' : 'bg-emerald-600 shadow-emerald-100 hover:bg-emerald-700'
+                      }`}
+                    >
+                      {isProcessing ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          প্রসেসিং...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-4 h-4" /> {withdrawMode === 'withdraw' ? 'উত্তোলন সম্পন্ন করুন' : 'বৃদ্ধি সম্পন্ন করুন'}
+                        </>
+                      )}
+                    </motion.button>
+                    <motion.button 
+                      whileHover={{ backgroundColor: "#e2e8f0" }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setShowWithdrawModal(false)}
+                      disabled={isProcessing}
+                      className="py-4 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] transition-all disabled:opacity-50"
+                    >
+                      বাতিল করুন
+                    </motion.button>
+                  </div>
+
+                  {/* Transaction History Section in Withdraw Modal */}
+                  <div className="mt-8 pt-8 border-t border-slate-100">
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-400">
+                          <History className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="text-[8px] font-black text-slate-800 uppercase tracking-widest">লেনদেনের ইতিহাস</div>
+                          <div className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">উত্তোলন ও জমার রেকর্ডসমূহ</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                      {/* Combine both collections and withdrawals for a full history view */}
+                      {(() => {
+                        const fullHistory = [
+                          ...(withdrawingUser.withdrawals || []).map(w => ({ ...w, type: 'withdraw' as const })),
+                          ...(withdrawingUser.history || []).map(h => ({ ...h, type: 'add' as const, purpose: (h as any).purpose || 'কিস্তি / জমা' }))
+                        ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+                        if (fullHistory.length === 0) {
+                          return (
+                            <div className="bg-slate-50/50 rounded-3xl p-10 text-center border-2 border-dashed border-slate-100">
+                              <div className="text-[8px] font-bold text-slate-400 uppercase tracking-[0.2em]">কোনো লেনদেনের ইতিহাস পাওয়া যায়নি</div>
+                            </div>
+                          );
+                        }
+
+                        return fullHistory.map((item, idx) => (
+                          <motion.div 
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: idx * 0.03 }}
+                            key={`hist-withdraw-modal-${idx}`} 
+                            className="bg-white rounded-2xl p-4 border border-slate-100 flex justify-between items-center group hover:shadow-md transition-all"
+                          >
+                            <div className="flex items-center gap-4">
+                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                                item.type === 'withdraw' ? 'bg-rose-50 text-rose-500' : 'bg-emerald-50 text-emerald-500'
+                              }`}>
+                                {item.type === 'withdraw' ? <ArrowDownCircle className="w-5 h-5" /> : <ArrowUpCircle className="w-5 h-5" />}
+                              </div>
+                              <div>
+                                <div className="text-[8px] font-black text-slate-800">{formatDate(item.date)}</div>
+                                <div className="text-[8px] font-bold text-slate-400 uppercase tracking-widest truncate max-w-[150px]">{item.purpose}</div>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className={`text-[9px] font-black ${item.type === 'withdraw' ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                {item.type === 'withdraw' ? '-' : '+'}{toBn(item.amount.toLocaleString())} ৳
+                              </div>
+                              <div className="text-[7px] font-bold text-slate-400 uppercase tracking-widest">
+                                {item.type === 'withdraw' ? 'উত্তোলন' : 'জমা / বৃদ্ধি'}
+                              </div>
+                            </div>
+                          </motion.div>
+                        ));
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
           </Modal>
         )}
 
@@ -2906,6 +3201,7 @@ export default function App() {
             playSound={playSound}
             isSuccess={isSuccess}
             isError={isError}
+            errorMessage={errorMessage}
           >
             <div className="space-y-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -2996,7 +3292,7 @@ export default function App() {
                           await new Promise(resolve => setTimeout(resolve, 1000));
                           downloadCSV(reportData, `Report_${reportRange.start}_to_${reportRange.end}.csv`);
                           setIsSuccess(true);
-                          await new Promise(resolve => setTimeout(resolve, 2000));
+                          await new Promise(resolve => setTimeout(resolve, 3000));
                           setIsSuccess(false);
                           setIsProcessing(false);
                           setShowReportsModal(false);
@@ -3085,6 +3381,19 @@ export default function App() {
                       )}
                     </motion.button>
                   </div>
+
+                  {isSpeechEnabled && (
+                    <motion.button
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => speak("আপনার সিস্টেমের ভয়েস টেস্ট সফল হয়েছে। আমি আপনার সহায়ক হিসেবে আছি।", isMuted, isSpeechEnabled)}
+                      className="w-full py-2.5 bg-bkash/5 text-bkash rounded-xl text-[8px] font-black uppercase tracking-[0.2em] border border-bkash/10 hover:bg-bkash/10 transition-all flex items-center justify-center gap-2 -mt-2 mb-2"
+                    >
+                      <Volume2 className="w-3.5 h-3.5" /> ভয়েস টেস্ট করুন
+                    </motion.button>
+                  )}
 
                   <div className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-100 shadow-sm transition-all hover:border-emerald-500/30">
                     <div className="flex items-center gap-3">
@@ -3179,7 +3488,7 @@ export default function App() {
 }
 
 // Modal Component Helper
-function Modal({ title, children, onClose, isLoading, isSuccess, isError, playSound }: { title: string, children: React.ReactNode, onClose: () => void, isLoading?: boolean, isSuccess?: boolean, isError?: boolean, playSound?: (type: any) => void }) {
+function Modal({ title, children, onClose, isLoading, isSuccess, isError, errorMessage, playSound }: { title: string, children: React.ReactNode, onClose: () => void, isLoading?: boolean, isSuccess?: boolean, isError?: boolean, errorMessage?: string, playSound?: (type: any) => void }) {
   const modalId = React.useId();
   
   const handleClose = () => {
@@ -3206,7 +3515,7 @@ function Modal({ title, children, onClose, isLoading, isSuccess, isError, playSo
         className="bg-white rounded-t-[2rem] sm:rounded-[2.5rem] shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto p-6 sm:p-8 lg:p-10 relative overflow-x-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        {isLoading && <ActionSpinner isSuccess={isSuccess} isError={isError} />}
+        {isLoading && <ActionSpinner isSuccess={isSuccess} isError={isError} errorMessage={errorMessage} />}
         <motion.div 
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}

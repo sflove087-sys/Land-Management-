@@ -13,6 +13,8 @@
         "expireDate": { "type": "string", "description": "Expiry date in ISO format" },
         "pwrBalance": { "type": "number", "description": "Current balance" },
         "chukirdharirName": { "type": "string", "description": "Contractor name" },
+        "nameBn": { "type": "string", "description": "User name in Bengali" },
+        "chukirdharirNameBn": { "type": "string", "description": "Contractor name in Bengali" },
         "isActive": { "type": "boolean", "description": "Account status" },
         "terms": { "type": "string", "description": "Collection terms" },
         "history": { "type": "array", "description": "Collection history", "items": { "$ref": "CollectionHistory" } },

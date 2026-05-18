@@ -21,6 +21,8 @@ export interface User {
   expireDate: string; // ISO format (YYYY-MM-DD)
   pwrBalance: number;
   chukirdharirName: string;
+  nameBn?: string;
+  chukirdharirNameBn?: string;
   terms?: string;
   history?: CollectionHistory[];
   withdrawals?: WithdrawalHistory[];
