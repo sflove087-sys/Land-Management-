@@ -549,6 +549,7 @@ export default function App() {
       audio.play().catch(error => {
         if (error.name === 'NotAllowedError') {
           console.warn("Ambient music autoplay prevented. Waiting for user interaction.");
+          setIsMusicPlaying(false);
         }
       });
     } else {
@@ -957,17 +958,17 @@ export default function App() {
     await new Promise(resolve => setTimeout(resolve, 1000));
     
     const userData = {
-      name: formValues.name,
-      nameBn: formValues.nameBn,
-      address: formValues.address,
-      mobile: formValues.mobile,
-      jomirPoriman: formValues.jomirPoriman,
-      amount: parseFloat(formValues.amount),
-      expireDate: formValues.expireDate,
-      pwrBalance: parseFloat(formValues.pwrBalance),
-      chukirdharirName: formValues.chukirdharirName,
-      chukirdharirNameBn: formValues.chukirdharirNameBn,
-      isActive: editingUser ? editingUser.isActive : true,
+      name: formValues.name || '',
+      nameBn: formValues.nameBn || '',
+      address: formValues.address || '',
+      mobile: formValues.mobile || '',
+      jomirPoriman: formValues.jomirPoriman || '',
+      amount: parseFloat(formValues.amount) || 0,
+      expireDate: formValues.expireDate || '',
+      pwrBalance: parseFloat(formValues.pwrBalance) || 0,
+      chukirdharirName: formValues.chukirdharirName || '',
+      chukirdharirNameBn: formValues.chukirdharirNameBn || '',
+      isActive: editingUser ? (editingUser.isActive ?? true) : true,
       withdrawals: editingUser ? (editingUser.withdrawals || []) : [],
       terms: formValues.terms || '',
     };
@@ -1051,9 +1052,9 @@ export default function App() {
       const updatedHistory = [...(collectingUser.history || []), newHistoryEntry];
       await updateDoc(doc(db, 'users', collectingUser.id), {
         collectedBalance: (collectingUser.collectedBalance || 0) + cost,
-        expireDate: newExpiryDate,
-        pwrBalance: collectingUser.pwrBalance - cost,
-        terms: collectionTerms,
+        expireDate: newExpiryDate || '',
+        pwrBalance: (collectingUser.pwrBalance || 0) - cost,
+        terms: collectionTerms || '',
         history: updatedHistory
       });
       playSound('success');
@@ -1147,7 +1148,7 @@ export default function App() {
         };
         const updatedWithdrawals = [...(withdrawingUser.withdrawals || []), newWithdrawal];
         await updateDoc(doc(db, 'users', withdrawingUser.id), {
-          amount: withdrawingUser.amount - amountToProcess,
+          amount: (withdrawingUser.amount || 0) - amountToProcess,
           withdrawals: updatedWithdrawals
         });
       } else {
@@ -1156,13 +1157,13 @@ export default function App() {
           date: new Date().toISOString(),
           amount: amountToProcess,
           monthsExtended: 0,
-          newExpiryDate: withdrawingUser.expireDate,
+          newExpiryDate: withdrawingUser.expireDate || '',
           purpose: withdrawPurpose || 'সরাসরি টাকা বৃদ্ধি'
         };
         // Reuse CollectionHistory structure but we'll add it to history or just update amount
         const updatedHistory = [...(withdrawingUser.history || []), newHistoryEntry] as any;
         await updateDoc(doc(db, 'users', withdrawingUser.id), {
-          amount: withdrawingUser.amount + amountToProcess,
+          amount: (withdrawingUser.amount || 0) + amountToProcess,
           history: updatedHistory
         });
       }
