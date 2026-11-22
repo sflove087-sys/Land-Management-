@@ -63,7 +63,9 @@ import {
   Settings,
   ToggleLeft,
   ToggleRight,
-  Check
+  Check,
+  SlidersHorizontal,
+  LayoutList
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toPng } from 'html-to-image';
@@ -628,6 +630,20 @@ export default function App() {
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showReportsModal, setShowReportsModal] = useState(false);
+  const [showExpiredPdfModal, setShowExpiredPdfModal] = useState(false);
+  const [showAllUsersPrintModal, setShowAllUsersPrintModal] = useState(false);
+  const [printListScope, setPrintListScope] = useState<'all' | 'filtered' | 'active' | 'warning' | 'expired' | 'deactivated'>('all');
+  const [printOrientation, setPrintOrientation] = useState<'portrait' | 'landscape'>('portrait');
+  const [printColumns, setPrintColumns] = useState({
+    chukirdhari: true,
+    address: true,
+    land: true,
+    contract: true,
+    balance: true,
+    collected: true,
+    expireDate: true,
+    status: true
+  });
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [withdrawingUser, setWithdrawingUser] = useState<User | null>(null);
   const [withdrawMode, setWithdrawMode] = useState<'withdraw' | 'add'>('withdraw');
@@ -947,6 +963,28 @@ export default function App() {
     return { totalAmount, active, warning, deactivated, collectionRate, totalUsers: users.length };
   }, [users]);
 
+  const printableUsers = useMemo(() => {
+    if (printListScope === 'filtered') return filteredUsers;
+    if (printListScope === 'all') return users;
+    return users.filter(user => {
+      const daysLeft = getDaysLeft(user.expireDate);
+      const status = user.isActive === false ? 'deactivated' : getStatus(daysLeft);
+      return status === printListScope;
+    });
+  }, [users, filteredUsers, printListScope]);
+
+  const printSummary = useMemo(() => {
+    return printableUsers.reduce(
+      (acc, u) => {
+        acc.totalAmount += u.amount || 0;
+        acc.totalBalance += u.pwrBalance || 0;
+        acc.totalCollected += u.collectedBalance || 0;
+        return acc;
+      },
+      { totalAmount: 0, totalBalance: 0, totalCollected: 0 }
+    );
+  }, [printableUsers]);
+
   const handleAddEdit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = e.currentTarget;
@@ -1246,6 +1284,121 @@ export default function App() {
     }
   };
 
+  const handleDownloadExpiredPDF = async () => {
+    const element = document.getElementById('expired-print-area');
+    if (!element) return;
+
+    setIsProcessing(true);
+    try {
+      await new Promise(resolve => setTimeout(resolve, 150));
+      
+      const imgData = await toPng(element, {
+        quality: 1,
+        pixelRatio: 3,
+        backgroundColor: '#ffffff',
+        style: {
+          '--color-bkash': '#e2136e',
+          '--color-emerald-500': '#10b981',
+          '--color-amber-500': '#f59e0b',
+          '--color-rose-500': '#f43f5e',
+        } as any
+      });
+      
+      const pdf = new jsPDF({
+        orientation: 'p',
+        unit: 'mm',
+        format: 'a4'
+      });
+      
+      const imgProps = pdf.getImageProperties(imgData);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`Expired_Tenures_${new Date().getTime()}.pdf`);
+      
+      setIsSuccess(true);
+      setTimeout(() => {
+        setIsSuccess(false);
+        setShowExpiredPdfModal(false);
+      }, 1500);
+    } catch (err) {
+      console.error('Expired list PDF generation failed:', err);
+      setIsError(true);
+      setTimeout(() => setIsError(false), 2000);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handlePrintAllUsers = async () => {
+    playSound('click');
+    window.focus();
+    window.print();
+  };
+
+  const handleDownloadAllUsersPDF = async () => {
+    const element = document.getElementById('all-users-print-area');
+    if (!element) return;
+
+    setIsProcessing(true);
+    try {
+      await new Promise(resolve => setTimeout(resolve, 150));
+
+      const imgData = await toPng(element, {
+        quality: 1,
+        pixelRatio: 2.5,
+        backgroundColor: '#ffffff',
+        style: {
+          '--color-bkash': '#e2136e',
+          '--color-emerald-500': '#10b981',
+          '--color-amber-500': '#f59e0b',
+          '--color-rose-500': '#f43f5e',
+        } as any
+      });
+
+      const pdf = new jsPDF({
+        orientation: printOrientation === 'landscape' ? 'l' : 'p',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      const imgProps = pdf.getImageProperties(imgData);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 6;
+      const usableWidth = pdfWidth - margin * 2;
+      const renderedHeight = (imgProps.height * usableWidth) / imgProps.width;
+
+      let heightLeft = renderedHeight;
+      let position = margin;
+
+      pdf.addImage(imgData, 'PNG', margin, position, usableWidth, renderedHeight);
+      heightLeft -= (pageHeight - margin * 2);
+
+      while (heightLeft > 0) {
+        position = heightLeft - renderedHeight + margin;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', margin, position, usableWidth, renderedHeight);
+        heightLeft -= (pageHeight - margin * 2);
+      }
+
+      pdf.save(`All_Users_List_${printListScope}_${new Date().toISOString().split('T')[0]}.pdf`);
+      playSound('success');
+      setIsSuccess(true);
+      setTimeout(() => {
+        setIsSuccess(false);
+      }, 1500);
+    } catch (err) {
+      console.error('All users PDF generation failed:', err);
+      playSound('error');
+      setIsError(true);
+      setTimeout(() => setIsError(false), 2000);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handleLogout = async () => {
     setIsProcessing(true);
     // Artificial delay for user request
@@ -1344,7 +1497,7 @@ export default function App() {
   }
 
   return (
-    <div className="flex min-h-screen text-[10px] bg-slate-50 overflow-x-hidden w-full max-w-full">
+    <div className="flex min-h-screen text-sm bg-[#f6f7f9] text-slate-900 overflow-x-hidden w-full max-w-full">
       <AnimatePresence>
         {isProcessing && !showAddEditModal && !showDeleteModal && !showCollectionModal && !showReportsModal && (
           <motion.div 
@@ -1365,142 +1518,193 @@ export default function App() {
             className="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center"
           >
             <div className="spinner mb-4"></div>
-            <p className="text-slate-500 font-bold tracking-widest text-[8px] uppercase">সিস্টেম লোড হচ্ছে...</p>
+            <p className="text-slate-500 font-semibold tracking-wider text-xs">সিস্টেম লোড হচ্ছে...</p>
           </motion.div>
         )}
       </AnimatePresence>
 
       {/* Sidebar */}
-      <aside className="fixed left-0 top-0 w-72 h-full bg-white text-slate-800 z-40 hidden lg:block border-r border-slate-100 shadow-sm">
-        <div className="p-8 border-b border-slate-50 bg-white">
-          <div className="flex items-center gap-3">
-            <div className="bg-bkash p-2.5 rounded-2xl shadow-lg shadow-bkash/20">
+      <aside className="fixed left-0 top-0 w-72 h-full bg-white text-slate-800 z-40 hidden lg:flex flex-col border-r border-slate-200/80">
+        <div className="px-6 py-6 border-b border-slate-100">
+          <div className="flex items-center gap-3.5">
+            <div className="bg-gradient-to-br from-bkash to-bkash-dark p-2.5 rounded-xl shadow-md shadow-bkash/20 shrink-0">
               <Landmark className="w-6 h-6 text-white" />
             </div>
-            <div>
-              <h2 className="text-xl font-black text-bkash tracking-tight">bKash Manager</h2>
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Professional System</p>
+            <div className="min-w-0">
+              <h2 className="text-lg font-extrabold text-slate-900 tracking-tight leading-tight truncate">LandManager Pro</h2>
+              <p className="text-[11px] text-slate-500 font-medium truncate">জমি ও চুক্তি ব্যবস্থাপনা</p>
             </div>
           </div>
         </div>
         
-        <nav className="p-6 space-y-2" aria-label="Main Navigation">
+        <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto custom-scrollbar" aria-label="Main Navigation">
+          <div className="px-3 py-1.5 text-[11px] font-bold text-slate-400 tracking-wide">
+            ক্যাটাগরি ফিল্টার
+          </div>
           {[
-            { id: 'all', label: 'ড্যাশবোর্ড', icon: LayoutDashboard },
-            { id: 'active', label: 'সক্রিয়', icon: CheckCircle },
-            { id: 'expired', label: 'মেয়াদ শেষ', icon: Clock },
-            { id: 'warning', label: 'সতর্কতা', icon: AlertTriangle },
-            { id: 'deactivated', label: 'বন্ধ', icon: Ban },
-          ].map((item) => (
-            <motion.button
-              key={item.id}
-              whileHover={{ x: 5, backgroundColor: "#f8fafc" }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => {
-                setFilter(item.id as StatusFilter);
-                playSound('click');
-              }}
-              aria-current={filter === item.id ? 'page' : undefined}
-              className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all font-bold ${
-                filter === item.id 
-                  ? 'bg-bkash-light text-bkash shadow-sm' 
-                  : 'text-slate-400 hover:text-slate-800'
-              }`}
-            >
-              <item.icon className="w-5 h-5 transition-transform group-hover:scale-110" />
-              <span className="text-[8px] uppercase tracking-wide">{item.label}</span>
-            </motion.button>
-          ))}
+            { id: 'all', label: 'ড্যাশবোর্ড (সব)', icon: LayoutDashboard, count: stats.totalUsers },
+            { id: 'active', label: 'সক্রিয় গ্রাহক', icon: CheckCircle, count: stats.active },
+            { id: 'warning', label: 'সতর্কতা (৩০ দিন)', icon: AlertTriangle, count: stats.warning },
+            { id: 'expired', label: 'মেয়াদ শেষ', icon: Clock, count: users.filter(u => u.isActive !== false && getDaysLeft(u.expireDate) < 0).length },
+            { id: 'deactivated', label: 'বন্ধ একাউন্ট', icon: Ban, count: stats.deactivated },
+          ].map((item) => {
+            const isActiveNav = filter === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => {
+                  setFilter(item.id as StatusFilter);
+                  playSound('click');
+                }}
+                aria-current={isActiveNav ? 'page' : undefined}
+                className={`w-full flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl transition-all text-left font-semibold text-[13px] ${
+                  isActiveNav
+                    ? 'bg-bkash-light text-bkash border border-bkash/15 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 border border-transparent'
+                }`}
+              >
+                <span className="flex items-center gap-3 min-w-0">
+                  <item.icon className={`w-4 h-4 shrink-0 ${isActiveNav ? 'text-bkash' : 'text-slate-400'}`} />
+                  <span className="truncate">{item.label}</span>
+                </span>
+                <span className={`text-xs font-bold tabular-nums shrink-0 ${isActiveNav ? 'text-bkash' : 'text-slate-400'}`}>
+                  {toBn(item.count)}
+                </span>
+              </button>
+            );
+          })}
 
-          <motion.button
-            whileHover={{ x: 5, backgroundColor: "#f8fafc" }}
-            whileTap={{ scale: 0.98 }}
-            onClick={() => {
-              setShowReportsModal(true);
-              playSound('pop');
-            }}
-            className="w-full flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all font-bold text-slate-400 hover:text-slate-800"
-          >
-            <FileBarChart className="w-5 h-5 text-bkash transition-transform group-hover:scale-110" />
-            <span className="text-[8px] uppercase tracking-wide">প্রতিবেদন</span>
-          </motion.button>
-          
-          <div className="pt-8 border-t border-slate-50 mt-8">
-            <motion.button
-              whileHover={{ backgroundColor: "#fff1f2" }}
-              whileTap={{ scale: 0.98 }}
+          <div className="pt-4 mt-4 border-t border-slate-100">
+            <div className="px-3 py-1.5 text-[11px] font-bold text-slate-400 tracking-wide">
+              রিপোর্ট ও প্রিন্ট
+            </div>
+            <button
               onClick={() => {
-                handleLogout();
-                playSound('click');
+                setPrintListScope('all');
+                setShowAllUsersPrintModal(true);
+                playSound('pop');
               }}
-              className="w-full flex items-center gap-3 px-5 py-4 rounded-2xl font-black uppercase tracking-[0.15em] text-[8px] text-rose-500 transition-all"
+              className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all font-semibold text-[13px] text-slate-700 hover:text-bkash hover:bg-bkash-light/60"
             >
-              <LogOut className="w-4 h-4" />
-              লগআউট
-            </motion.button>
+              <Printer className="w-4 h-4 text-bkash shrink-0" />
+              <span className="truncate">সকল ইউজার তালিকা প্রিন্ট</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setShowReportsModal(true);
+                playSound('pop');
+              }}
+              className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all font-semibold text-[13px] text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+            >
+              <FileBarChart className="w-4 h-4 text-slate-500 shrink-0" />
+              <span className="truncate">আর্থিক প্রতিবেদন ও CSV</span>
+            </button>
           </div>
         </nav>
+
+        <div className="p-4 border-t border-slate-100 bg-slate-50/50 space-y-2">
+          <div className="px-3 py-2 rounded-xl bg-white border border-slate-200/70">
+            <p className="text-xs font-bold text-slate-800 truncate">{currentUser.displayName || 'অ্যাডমিন'}</p>
+            <p className="text-[11px] text-slate-400 truncate">{currentUser.email}</p>
+          </div>
+          <button
+            onClick={() => {
+              handleLogout();
+              playSound('click');
+            }}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs text-rose-600 bg-rose-50/70 hover:bg-rose-100 border border-rose-200/60 transition-all"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>লগআউট করুন</span>
+          </button>
+        </div>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 lg:ml-72 p-4 sm:p-6 lg:p-10 pb-32 md:pb-10 max-w-full overflow-x-hidden">
+      <main className="flex-1 lg:ml-72 p-4 sm:p-6 lg:p-8 pb-28 md:pb-10 max-w-full overflow-x-hidden">
         <div className="max-w-7xl mx-auto">
           {/* Top Bar */}
-          <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-6 md:mb-10 p-4 md:p-0 bg-white md:bg-transparent rounded-3xl md:rounded-0 shadow-sm md:shadow-none border border-slate-100 md:border-0 overflow-hidden w-full">
-            <div className="flex items-center justify-between w-full md:w-auto">
+          <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 p-4 sm:px-6 sm:py-4 bg-white rounded-2xl border border-slate-200/80 shadow-xs w-full">
+            <div className="flex items-center justify-between w-full md:w-auto gap-3">
               <div className="min-w-0">
-                <h1 className="text-xl md:text-3xl font-black text-slate-800 leading-none tracking-tighter">ড্যাশবোর্ড</h1>
-                <div className="flex items-center gap-2 mt-1.5 overflow-hidden">
-                  <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest truncate hidden sm:block">চুক্তি ও পাওয়ার ব্যালেন্স ট্র্যাকিং</p>
-                  <span className="w-1 h-1 bg-slate-200 rounded-full hidden sm:block"></span>
-              <div className="text-bkash text-[10px] font-black uppercase tracking-widest flex items-center gap-1 shrink-0">
-                <Clock className="w-3 h-3" /> {liveTime.toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-              </div>
+                <h1 className="text-lg sm:text-2xl font-extrabold text-slate-900 tracking-tight leading-tight">
+                  গ্রাহক ও চুক্তি ড্যাশবোর্ড
+                </h1>
+                <div className="flex items-center gap-2 mt-1 text-xs text-slate-500 font-medium">
+                  <span className="hidden sm:inline truncate">চুক্তি ও পাওয়ার ব্যালেন্স ব্যবস্থাপনা</span>
+                  <span className="hidden sm:inline text-slate-300" aria-hidden="true">·</span>
+                  <span className="text-bkash font-bold tabular-nums flex items-center gap-1 shrink-0">
+                    <Clock className="w-3.5 h-3.5" />
+                    {liveTime.toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                  </span>
                 </div>
               </div>
+
+              {/* Mobile Quick Print Icon Button */}
+              <div className="flex items-center gap-1.5 md:hidden">
+                <button
+                  onClick={() => {
+                    setPrintListScope('all');
+                    setShowAllUsersPrintModal(true);
+                    playSound('pop');
+                  }}
+                  aria-label="সকল ইউজার প্রিন্ট"
+                  title="সকল ইউজার তালিকা প্রিন্ট"
+                  className="w-10 h-10 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 hover:text-bkash flex items-center justify-center transition-colors"
+                >
+                  <Printer size={16} />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between md:justify-end gap-2.5 w-full md:w-auto">
               <div className="flex items-center gap-2">
                 {/* Audio Controls */}
-                <div className="hidden sm:flex items-center gap-1 bg-white p-1 rounded-2xl border border-slate-100 shadow-sm">
-                  <motion.button 
-                    whileTap={{ scale: 0.9 }}
+                <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200/70">
+                  <button
                     onClick={() => {
                       setIsMuted(!isMuted);
                       playSound('click');
                     }}
-                    className={`p-2 rounded-xl transition-all ${isMuted ? 'text-rose-500 bg-rose-50' : 'text-slate-400 hover:text-bkash hover:bg-bkash-light'}`}
-                    title={isMuted ? 'উনমিউট' : 'মিউট'}
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${isMuted ? 'text-rose-600 bg-rose-50' : 'text-slate-500 hover:text-bkash hover:bg-white'}`}
+                    title={isMuted ? 'সাউন্ড চালু করুন' : 'মিউট করুন'}
+                    aria-label={isMuted ? 'সাউন্ড চালু করুন' : 'মিউট করুন'}
                   >
-                    {isMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
-                  </motion.button>
-                  
-                  <motion.button 
-                    whileTap={{ scale: 0.9 }}
+                    {isMuted ? <VolumeX size={15} /> : <Volume2 size={15} />}
+                  </button>
+                  <button
                     onClick={() => {
                       setIsMusicPlaying(!isMusicPlaying);
                       playSound('click');
                     }}
-                    className={`p-2 rounded-xl transition-all ${isMusicPlaying ? 'text-emerald-500 bg-emerald-50' : 'text-slate-400 hover:text-bkash hover:bg-bkash-light'}`}
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${isMusicPlaying ? 'text-emerald-600 bg-emerald-50' : 'text-slate-500 hover:text-bkash hover:bg-white'}`}
                     title={isMusicPlaying ? 'গান বন্ধ করুন' : 'গান শুনুন'}
+                    aria-label={isMusicPlaying ? 'গান বন্ধ করুন' : 'গান শুনুন'}
                   >
-                    <Music size={14} className={isMusicPlaying ? 'animate-pulse' : ''} />
-                  </motion.button>
+                    <Music size={15} />
+                  </button>
                 </div>
 
                 {/* Notification Bell */}
                 <div className="relative">
-                  <motion.button 
-                    whileTap={{ scale: 0.9 }}
+                  <button
                     onClick={() => {
                       setShowNotifications(!showNotifications);
                       playSound('pop');
                     }}
-                    className={`p-3 rounded-xl transition-all shadow-sm border border-slate-100 relative ${showNotifications ? 'bg-bkash text-white' : 'bg-white text-slate-400 hover:text-bkash'}`}
+                    aria-label="রিমাইন্ডার নোটিফিকেশন"
+                    className={`w-10 h-10 rounded-xl transition-colors border relative flex items-center justify-center ${
+                      showNotifications ? 'bg-bkash text-white border-bkash' : 'bg-white text-slate-500 border-slate-200/80 hover:text-bkash hover:border-bkash/30'
+                    }`}
                   >
-                    {notifications.length > 0 ? <BellRing size={16} className={notifications.length > 0 ? "animate-bounce" : ""} /> : <Bell size={16} />}
+                    {notifications.length > 0 ? <BellRing size={16} /> : <Bell size={16} />}
                     {notifications.length > 0 && (
-                      <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 border border-white rounded-full"></span>
+                      <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-rose-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white tabular-nums">
+                        {toBn(notifications.length)}
+                      </span>
                     )}
-                  </motion.button>
+                  </button>
 
                   <AnimatePresence>
                     {showNotifications && (
@@ -1508,36 +1712,33 @@ export default function App() {
                         initial={{ opacity: 0, y: 10, scale: 0.95 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                        className="absolute right-0 mt-3 w-72 bg-white rounded-3xl shadow-2xl shadow-slate-200 border border-slate-100 z-[2000] overflow-hidden"
+                        className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-slate-200 z-[2000] overflow-hidden"
                       >
-                        <div className="p-4 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
-                          <h3 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">রিমাইন্ডার</h3>
-                          <span className="px-1.5 py-0.5 bg-bkash text-white rounded-full text-[7px] font-black">{notifications.length}</span>
+                        <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                          <h3 className="text-xs font-bold text-slate-800">মেয়াদ রিমাইন্ডার</h3>
+                          <span className="text-xs font-bold text-bkash tabular-nums">{toBn(notifications.length)} টি</span>
                         </div>
-                        <div className="max-h-[300px] overflow-y-auto p-2 space-y-2 custom-scrollbar">
+                        <div className="max-h-[300px] overflow-y-auto p-2.5 space-y-2 custom-scrollbar">
                           {notifications.length === 0 ? (
-                            <div className="py-8 text-center text-slate-400 text-[8px] font-bold uppercase tracking-widest">কোনো নতুন নোটিফিকেশন নেই</div>
+                            <div className="py-8 text-center text-slate-400 text-xs font-medium">কোনো নতুন নোটিফিকেশন নেই</div>
                           ) : (
-                            notifications.map((notif, idx) => (
-                              <motion.div 
-                                initial={{ opacity: 0, x: 5 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ delay: idx * 0.05 }}
+                            notifications.map((notif) => (
+                              <div
                                 key={notif.id}
-                                className={`p-4 rounded-2xl border flex gap-3 transition-all ${
-                                  notif.type === 'alert' ? 'bg-rose-50 border-rose-100' : 'bg-amber-50 border-amber-100'
+                                className={`p-3 rounded-xl border flex gap-3 ${
+                                  notif.type === 'alert' ? 'bg-rose-50/70 border-rose-200/70' : 'bg-amber-50/70 border-amber-200/70'
                                 }`}
                               >
-                                <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
-                                  notif.type === 'alert' ? 'bg-rose-500 text-white' : 'bg-amber-500 text-white'
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                                  notif.type === 'alert' ? 'bg-rose-600 text-white' : 'bg-amber-500 text-white'
                                 }`}>
-                                  {notif.type === 'alert' ? <AlertTriangle size={12} /> : <Clock size={12} />}
+                                  {notif.type === 'alert' ? <AlertTriangle size={14} /> : <Clock size={14} />}
                                 </div>
                                 <div className="min-w-0">
-                                  <h4 className="text-[9px] font-black text-slate-800 uppercase truncate">{notif.title}</h4>
-                                  <p className="text-[8px] font-bold text-slate-600 leading-tight">{notif.message}</p>
+                                  <h4 className="text-xs font-bold text-slate-800 truncate">{notif.title}</h4>
+                                  <p className="text-xs text-slate-600 leading-snug mt-0.5">{notif.message}</p>
                                 </div>
-                              </motion.div>
+                              </div>
                             ))
                           )}
                         </div>
@@ -1547,155 +1748,181 @@ export default function App() {
                 </div>
 
                 {/* Settings Button */}
-                <motion.button 
-                  whileTap={{ scale: 0.9 }}
+                <button
                   onClick={() => {
                     setShowSettingsModal(true);
                     playSound('pop');
                   }}
-                  className={`p-3 rounded-xl transition-all shadow-sm border border-slate-100 bg-white text-slate-400 hover:text-bkash`}
+                  className="w-10 h-10 rounded-xl transition-colors border border-slate-200/80 bg-white text-slate-500 hover:text-bkash hover:border-bkash/30 flex items-center justify-center"
                   title="সেটিংস"
+                  aria-label="সেটিংস"
                 >
                   <Settings size={16} />
-                </motion.button>
+                </button>
+              </div>
+
+              {/* Desktop Action Buttons */}
+              <div className="hidden md:flex items-center gap-2.5">
+                <button
+                  onClick={() => {
+                    setPrintListScope('all');
+                    setShowAllUsersPrintModal(true);
+                    playSound('pop');
+                  }}
+                  className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold transition-colors flex items-center gap-2 text-xs whitespace-nowrap shrink-0 shadow-xs"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>সকল তালিকা প্রিন্ট</span>
+                </button>
+
+                <button
+                  onClick={() => { 
+                    setEditingUser(null); 
+                    setShowAddEditModal(true);
+                    playSound('pop');
+                  }}
+                  className="px-4 py-2.5 bg-bkash hover:bg-bkash-dark text-white rounded-xl font-bold transition-colors flex items-center gap-2 text-xs whitespace-nowrap shrink-0 shadow-sm shadow-bkash/20"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>নতুন এন্ট্রি</span>
+                </button>
               </div>
             </div>
-            <motion.button 
-              whileHover={{ scale: 1.02, y: -2 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => { 
-                setEditingUser(null); 
-                setShowAddEditModal(true);
-                playSound('pop');
-              }}
-              className="hidden md:flex px-6 py-3.5 bg-bkash text-white rounded-2xl font-black shadow-lg shadow-bkash/20 hover:bg-bkash-dark transition-all items-center gap-2 text-[10px] uppercase tracking-widest"
-            >
-              <Plus className="w-4 h-4" />
-              নতুন এন্ট্রি যোগ করুন
-            </motion.button>
           </header>
 
-          {/* Stats Grid */}
-          <section className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 md:gap-6 mb-4 md:mb-10 px-0 sm:px-0">
+          {/* Stats Grid - Balanced 6-column KPI strip */}
+          <section className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4 mb-6" aria-label="সারসংক্ষেপ পরিসংখ্যান">
             {[
-              { label: 'মোট চুক্তির টাকা', val: toBn(stats.totalAmount.toLocaleString()) + ' ৳', icon: Banknote, color: 'from-pink-500 to-bkash', action: () => setShowReportsModal(true) },
-              { label: 'মোট ইউজার', val: toBn(stats.totalUsers), icon: Users, color: 'from-fuchsia-500 to-pink-600', action: () => { setFilter('all'); window.scrollTo({ top: 800, behavior: 'smooth' }); } },
-              { label: 'সক্রিয় ইউজার', val: toBn(stats.active), icon: CircleCheck, color: 'from-emerald-400 to-emerald-600', action: () => { setFilter('active'); window.scrollTo({ top: 800, behavior: 'smooth' }); } },
-              { label: 'সতর্কতা (৩০ দিন)', val: toBn(stats.warning), icon: AlertTriangle, color: 'from-amber-400 to-amber-600', action: () => { setFilter('warning'); window.scrollTo({ top: 800, behavior: 'smooth' }); } },
-              { label: 'বন্ধ একাউন্ট', val: toBn(stats.deactivated), icon: Ban, color: 'from-slate-400 to-slate-600', action: () => { setFilter('deactivated'); window.scrollTo({ top: 800, behavior: 'smooth' }); } },
-              { label: 'সংগ্রহের হার', val: toBn(stats.collectionRate) + '%', icon: TrendingUp, color: 'from-bkash to-bkash-dark', action: () => setShowReportsModal(true) },
-            ].map((stat, i) => (
-              <motion.div 
-                initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                transition={{ 
-                  delay: i * 0.1,
-                  type: "spring",
-                  stiffness: 100,
-                  damping: 15
+              { label: 'মোট চুক্তির টাকা', val: toBn(stats.totalAmount.toLocaleString()) + ' ৳', icon: Banknote, iconBg: 'bg-pink-50 text-bkash', action: () => setShowReportsModal(true) },
+              { label: 'মোট গ্রাহক', val: toBn(stats.totalUsers) + ' জন', icon: Users, iconBg: 'bg-slate-100 text-slate-700', action: () => { setFilter('all'); } },
+              { label: 'সক্রিয় গ্রাহক', val: toBn(stats.active) + ' জন', icon: CircleCheck, iconBg: 'bg-emerald-50 text-emerald-600', action: () => { setFilter('active'); } },
+              { label: 'সতর্কতা (৩০ দিন)', val: toBn(stats.warning) + ' জন', icon: AlertTriangle, iconBg: 'bg-amber-50 text-amber-600', action: () => { setFilter('warning'); } },
+              { label: 'বন্ধ একাউন্ট', val: toBn(stats.deactivated) + ' জন', icon: Ban, iconBg: 'bg-slate-100 text-slate-500', action: () => { setFilter('deactivated'); } },
+              { label: 'সংগ্রহের হার', val: toBn(stats.collectionRate) + '%', icon: TrendingUp, iconBg: 'bg-bkash-light text-bkash', action: () => setShowReportsModal(true) },
+            ].map((stat) => (
+              <button
+                key={stat.label}
+                type="button"
+                onClick={() => {
+                  stat.action();
+                  playSound('click');
                 }}
-                whileHover={{ y: -5, cursor: 'pointer' }}
-                onClick={stat.action}
-                key={stat.label} 
-                className={`bg-white p-4 rounded-2xl border border-slate-100 shadow-sm transition-all group flex flex-col items-center text-center active:scale-95 ${i === 4 ? 'col-span-2 md:col-span-1' : ''}`}
+                className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md hover:border-bkash/30 transition-all text-left flex flex-col justify-between gap-3 group"
               >
-                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${stat.color} flex items-center justify-center text-white mb-2 shadow-lg shadow-pink-100 group-hover:scale-110 transition-transform`}>
-                  <stat.icon className="w-5 h-5" />
+                <div className="flex items-center justify-between w-full">
+                  <span className="text-xs font-semibold text-slate-500 truncate">{stat.label}</span>
+                  <div className={`w-8 h-8 rounded-lg ${stat.iconBg} flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform`}>
+                    <stat.icon className="w-4 h-4" />
+                  </div>
                 </div>
-                <h3 className="text-[12px] sm:text-lg md:text-xl font-black text-slate-800 tracking-tight">{stat.val}</h3>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{stat.label}</p>
-              </motion.div>
+                <div className="text-base sm:text-lg font-extrabold text-slate-900 tabular-nums tracking-tight truncate w-full">
+                  {stat.val}
+                </div>
+              </button>
             ))}
           </section>
 
           {/* Dashboard Controls */}
-          <div className="bg-white rounded-[2rem] p-3 md:p-5 mb-8 shadow-xl shadow-slate-100 border border-slate-100 flex flex-col xl:flex-row gap-4 md:gap-6 items-center w-full max-w-full overflow-hidden">
-            <motion.div 
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.3 }}
-              className="flex-1 relative group w-full min-w-0"
-            >
-              <div className="absolute inset-0 bg-bkash/5 rounded-2xl blur-xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-500" />
-              <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5 z-10 transition-colors group-focus-within:text-bkash" aria-hidden="true" />
+          <div className="bg-white rounded-2xl p-3 sm:p-4 mb-6 shadow-xs border border-slate-200/80 flex flex-col xl:flex-row gap-3 sm:gap-4 items-stretch xl:items-center w-full">
+            <div className="flex-1 relative min-w-0">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4 pointer-events-none" aria-hidden="true" />
               <input 
                 type="text" 
-                placeholder="নাম, মোবাইল বা ঠিকানা দিয়ে খুঁজুন..." 
+                placeholder="নাম, মোবাইল, চুক্তিধারী বা ঠিকানা দিয়ে খুঁজুন..." 
                 aria-label="রেকর্ড খুঁজুন"
-                className="relative w-full pl-14 pr-5 py-4 bg-slate-50/50 border border-slate-100 rounded-[1.25rem] focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/5 transition-all outline-none text-[10px] font-bold shadow-sm placeholder:text-slate-300 truncate"
+                className="w-full pl-10 pr-9 py-2.5 bg-slate-50 border border-slate-200/80 rounded-xl focus:border-bkash focus:bg-white focus:ring-3 focus:ring-bkash/10 transition-all outline-none text-sm font-medium text-slate-800 placeholder:text-slate-400"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
-            </motion.div>
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch('')}
+                  aria-label="সার্চ মুছুন"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 flex items-center justify-center"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
             
-            <div className="flex flex-col md:flex-row gap-3 w-full xl:w-auto shrink-0 overflow-hidden">
-              <div className="flex bg-slate-50 p-1.5 rounded-[1.25rem] border border-slate-100/50 flex-1 md:flex-initial overflow-x-auto no-scrollbar scroll-smooth">
+            <div className="flex flex-col md:flex-row gap-2.5 w-full xl:w-auto shrink-0 items-stretch md:items-center">
+              <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200/60 overflow-x-auto no-scrollbar">
                 {(['all', 'active', 'expired', 'warning', 'deactivated'] as StatusFilter[]).map((s) => (
-                  <motion.button
+                  <button
                     key={s}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
                     onClick={() => {
                       setFilter(s);
                       playSound('pop');
                     }}
                     aria-pressed={filter === s}
-                    className={`whitespace-nowrap px-5 py-2.5 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all duration-300 flex-1 md:flex-none ${
-                      filter === s ? 'bg-white shadow-md text-bkash' : 'text-slate-400 hover:text-slate-600'
+                    className={`whitespace-nowrap shrink-0 px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
+                      filter === s ? 'bg-white shadow-xs text-bkash' : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
                     {s === 'all' ? 'সব' : s === 'active' ? 'সক্রিয়' : s === 'expired' ? 'মেয়াদ শেষ' : s === 'warning' ? 'সতর্কতা' : 'বন্ধ'}
-                  </motion.button>
+                  </button>
                 ))}
               </div>
 
-              <div className="flex items-center gap-2 bg-slate-800 p-1.5 rounded-[1.25rem] shadow-lg shadow-slate-900/10 overflow-x-auto no-scrollbar scroll-smooth">
-                <div className="px-3 py-2 flex items-center gap-2 text-slate-400 border-r border-slate-700/50 shrink-0 group relative">
-                  <ArrowUpDown className="w-3 h-3" />
-                  <span className="text-[7px] font-black uppercase tracking-widest hidden sm:inline">Sort By</span>
-                  {/* Tooltip hint for Shift+Click */}
-                  <div className="absolute bottom-full left-0 mb-2 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all">
-                    <div className="bg-slate-900 text-white text-[6px] font-bold px-2 py-1 rounded whitespace-nowrap shadow-xl border border-slate-700 uppercase tracking-widest">
-                      Shift + Click for Multi-Sort
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 w-full">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setPrintListScope(filter === 'all' && !search && sortConfig.length === 0 ? 'all' : 'filtered');
+                    setShowAllUsersPrintModal(true);
+                    playSound('pop');
+                  }}
+                  className="whitespace-nowrap shrink-0 px-3.5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <Printer className="w-3.5 h-3.5" /> তালিকা প্রিন্ট
+                </button>
+
+                {filter === 'expired' && (
+                  <button
+                    onClick={() => {
+                      setShowExpiredPdfModal(true);
+                      playSound('pop');
+                    }}
+                    className="whitespace-nowrap shrink-0 px-3.5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <FileDown className="w-3.5 h-3.5" /> মেয়াদ উত্তীর্ণ PDF
+                  </button>
+                )}
+
+                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200/60 overflow-x-auto no-scrollbar">
+                  <span className="px-2 text-[11px] font-bold text-slate-400 hidden sm:inline whitespace-nowrap">সাজান:</span>
                   {[
-                    { key: 'name', label: 'Name' },
-                    { key: 'amount', label: 'Ledger' },
-                    { key: 'expireDate', label: 'Timeline' },
+                    { key: 'name', label: 'নাম' },
+                    { key: 'amount', label: 'টাকা' },
+                    { key: 'expireDate', label: 'মেয়াদ' },
                   ].map((item) => {
                     const isActive = sortConfig.find(sc => sc.field === item.key);
                     const index = sortConfig.findIndex(sc => sc.field === item.key);
                     
                     return (
-                      <motion.button
+                      <button
                         key={item.key}
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
                         onClick={(e) => {
                           toggleSort(item.key as keyof User, e.shiftKey);
                           playSound('click');
                         }}
                         aria-label={`Sort by ${item.label}`}
                         aria-pressed={!!isActive}
-                        className={`whitespace-nowrap px-4 py-2.5 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all flex-1 md:flex-none ${
-                          isActive ? 'bg-bkash text-white shadow-lg shadow-bkash/20' : 'text-slate-400 hover:text-slate-100 hover:bg-slate-700'
-                        } flex items-center justify-center gap-2`}
+                        title="Shift + Click দিয়ে মাল্টি-সর্ট করুন"
+                        className={`whitespace-nowrap shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                          isActive ? 'bg-bkash text-white shadow-xs' : 'text-slate-600 hover:text-slate-900 hover:bg-white'
+                        }`}
                       >
                         {item.label}
                         {isActive && (
-                          <div className="flex items-center gap-1">
-                            {isActive.direction === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                          <span className="flex items-center gap-0.5">
+                            {isActive.direction === 'asc' ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                             {sortConfig.length > 1 && (
-                              <span className={`text-[7px] w-3 h-3 flex items-center justify-center rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-bkash/10 text-bkash'}`}>
-                                {index + 1}
-                              </span>
+                              <span className="text-[10px] px-1 bg-white/20 rounded-full tabular-nums">{index + 1}</span>
                             )}
-                          </div>
+                          </span>
                         )}
-                      </motion.button>
+                      </button>
                     );
                   })}
                 </div>
@@ -1709,174 +1936,194 @@ export default function App() {
                 {/* Mobile Card View (shown below lg breakpoint) */}
                 <div className="grid grid-cols-1 gap-3 lg:hidden">
                   <AnimatePresence mode="popLayout">
-                    {filteredUsers.map((user) => (
-                      <motion.div
-                        layout
-                        initial={{ opacity: 0, scale: 0.98 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.98 }}
-                        key={user.id}
-                        className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm overflow-hidden relative group"
-                      >
-                        <div className="flex justify-between items-start mb-3">
-                          <div className="flex items-center gap-2.5">
-                            <div className={`w-1.5 h-8 rounded-full ${
-                              getStatus(getDaysLeft(user.expireDate)) === 'active' ? 'bg-emerald-500' : getStatus(getDaysLeft(user.expireDate)) === 'warning' ? 'bg-amber-500' : 'bg-bkash'
-                            }`} />
+                    {filteredUsers.map((user) => {
+                      const daysLeft = getDaysLeft(user.expireDate);
+                      const status = user.isActive === false ? 'deactivated' : getStatus(daysLeft);
+                      const statusLabel = status === 'active' ? 'সক্রিয়' : status === 'warning' ? 'সতর্কতা' : status === 'deactivated' ? 'বন্ধ' : 'মেয়াদ শেষ';
+                      const statusBadgeClass = status === 'active'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : status === 'warning'
+                        ? 'bg-amber-50 text-amber-700 border-amber-200'
+                        : status === 'deactivated'
+                        ? 'bg-slate-100 text-slate-600 border-slate-200'
+                        : 'bg-rose-50 text-rose-700 border-rose-200';
+
+                      return (
+                        <motion.div
+                          layout
+                          initial={{ opacity: 0, scale: 0.98 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.98 }}
+                          key={user.id}
+                          className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs overflow-hidden"
+                        >
+                          <div className="flex justify-between items-start gap-3 mb-3">
                             <div className="min-w-0">
-                              <h4 className="font-extrabold text-slate-800 uppercase tracking-tight text-[10px] truncate max-w-[170px]">
-                                {user.name}
-                              </h4>
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-bold text-slate-900 text-sm truncate">
+                                  {user.name}
+                                </h4>
+                                <span className={`px-2 py-0.5 rounded-md border text-[10px] font-bold shrink-0 ${statusBadgeClass}`}>
+                                  {statusLabel}
+                                </span>
+                              </div>
                               {user.nameBn && (
-                                <p className="text-[8px] font-bold text-slate-400 truncate leading-none mt-0.5">{user.nameBn}</p>
+                                <p className="text-xs font-medium text-slate-500 truncate mt-0.5">{user.nameBn}</p>
                               )}
-                              <div className="flex items-center gap-1.5 text-[9px] text-bkash font-black tracking-widest mt-0.5">
-                                <Phone className="w-2.5 h-2.5 shrink-0" />
+                              <div className="flex items-center gap-1.5 text-xs text-bkash font-bold mt-1 tabular-nums">
+                                <Phone className="w-3 h-3 shrink-0" />
                                 <span>{toBn(user.mobile)}</span>
                               </div>
                             </div>
+                            <div className="bg-bkash-light text-bkash px-3 py-1.5 rounded-xl border border-bkash/15 font-extrabold text-xs tabular-nums shrink-0">
+                              {toBn(user.pwrBalance.toLocaleString())} ৳
+                            </div>
                           </div>
-                          <div className="bg-bkash-light/20 text-bkash px-2.5 py-1 rounded-lg border border-bkash/5 font-black text-[10px]">
-                            {toBn(user.pwrBalance.toLocaleString())} ৳
-                          </div>
-                        </div>
 
-                        <div className="grid grid-cols-2 gap-3 mb-4 p-3 bg-slate-50/50 rounded-xl border border-slate-100/50">
-                          <div>
-                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5 flex items-center gap-1">
-                              <MapPin className="w-2.5 h-2.5 text-bkash" /> ঠিকানা
-                            </div>
-                            <p className="text-[10px] font-bold text-slate-600 truncate">{user.address}</p>
-                          </div>
-                          <div className="flex flex-col gap-1">
-                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5 flex items-center gap-1">
-                              <Calendar className="w-2.5 h-2.5 text-bkash" /> মেয়াদ শেষ
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <p className="text-[10px] font-black text-slate-800 leading-none">{formatDate(user.expireDate)}</p>
-                              <div className="scale-[0.85] origin-left border-l border-slate-200 pl-3">
-                                <Countdown dateStr={user.expireDate} compact />
+                          <div className="grid grid-cols-2 gap-3 mb-3.5 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                            <div className="min-w-0">
+                              <div className="text-[11px] font-semibold text-slate-400 mb-0.5 flex items-center gap-1">
+                                <MapPin className="w-3 h-3 text-bkash shrink-0" /> ঠিকানা
                               </div>
+                              <p className="text-xs font-semibold text-slate-700 truncate">{user.address}</p>
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-[11px] font-semibold text-slate-400 mb-0.5 flex items-center gap-1">
+                                <Calendar className="w-3 h-3 text-bkash shrink-0" /> মেয়াদ শেষ
+                              </div>
+                              <p className="text-xs font-bold text-slate-800 tabular-nums">{formatDate(user.expireDate)}</p>
                             </div>
                           </div>
-                        </div>
 
-                        <div className="flex items-center justify-between gap-2.5 pt-3 border-t border-slate-100">
-                          <motion.button 
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                            onClick={() => { setViewingUser(user); setViewMode('card'); setShowViewModal(true); }}
-                            className="flex-1 py-2.5 bg-bkash/5 text-bkash font-black uppercase tracking-widest text-[10px] rounded-lg flex items-center justify-center gap-1.5 border border-bkash/10"
-                          >
-                            <CreditCard className="w-3 h-3" /> কার্ড
-                          </motion.button>
-                          <div className="flex gap-1.5">
-                            {[
-                              { icon: Eye, label: 'বিস্তারিত', color: 'text-slate-400 bg-slate-50 border-slate-100', onClick: () => { setViewingUser(user); setViewMode('details'); setShowViewModal(true); playSound('pop'); } },
-                              { icon: ArrowUpCircle, label: 'উত্তোলন', color: 'text-blue-500 bg-blue-50 border-blue-100', onClick: () => handleOpenWithdraw(user) },
-                              { icon: user.isActive ? UserMinus : UserCheck, label: user.isActive ? 'ডিঅ্যাক্টিভেট' : 'অ্যাক্টিভেট', color: user.isActive ? 'text-amber-500 bg-amber-50 border-amber-100' : 'text-emerald-500 bg-emerald-50 border-emerald-100', onClick: () => toggleUserStatus(user) },
-                              { icon: HandCoins, label: 'সংগ্রহ', color: 'text-emerald-500 bg-emerald-50 border-emerald-100', onClick: () => handleOpenCollection(user) },
-                              { icon: Edit, label: 'সম্পাদন', color: 'text-amber-500 bg-amber-50 border-amber-100', onClick: () => { setEditingUser(user); setShowAddEditModal(true); } },
-                              { icon: Trash2, label: 'ডিলিট', color: 'text-rose-500 bg-rose-50 border-rose-100', onClick: () => { setUserToDelete(user); setShowDeleteModal(true); } },
-                            ].map((action, i) => (
-                              <motion.button
-                                key={i}
-                                whileHover={{ scale: 1.1, y: -2 }}
-                                whileTap={{ scale: 0.9 }}
-                                onClick={action.onClick}
-                                aria-label={action.label}
-                                className={`w-8 h-8 rounded-lg border flex items-center justify-center transition-all ${action.color}`}
-                              >
-                                <action.icon className="w-3.5 h-3.5" />
-                              </motion.button>
-                            ))}
+                          <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-100">
+                            <button
+                              onClick={() => { setViewingUser(user); setViewMode('card'); setShowViewModal(true); }}
+                              className="px-3 py-2 bg-bkash-light text-bkash font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 border border-bkash/15"
+                            >
+                              <CreditCard className="w-3.5 h-3.5" /> কার্ড
+                            </button>
+                            <div className="flex gap-1.5">
+                              {[
+                                { icon: Eye, label: 'বিস্তারিত', color: 'text-slate-600 bg-slate-50 border-slate-200', onClick: () => { setViewingUser(user); setViewMode('details'); setShowViewModal(true); playSound('pop'); } },
+                                { icon: ArrowUpCircle, label: 'উত্তোলন', color: 'text-blue-600 bg-blue-50 border-blue-200', onClick: () => handleOpenWithdraw(user) },
+                                { icon: user.isActive ? UserMinus : UserCheck, label: user.isActive ? 'ডিঅ্যাক্টিভেট' : 'অ্যাক্টিভেট', color: user.isActive ? 'text-amber-600 bg-amber-50 border-amber-200' : 'text-emerald-600 bg-emerald-50 border-emerald-200', onClick: () => toggleUserStatus(user) },
+                                { icon: HandCoins, label: 'সংগ্রহ', color: 'text-emerald-600 bg-emerald-50 border-emerald-200', onClick: () => handleOpenCollection(user) },
+                                { icon: Edit, label: 'সম্পাদন', color: 'text-amber-600 bg-amber-50 border-amber-200', onClick: () => { setEditingUser(user); setShowAddEditModal(true); } },
+                                { icon: Trash2, label: 'ডিলিট', color: 'text-rose-600 bg-rose-50 border-rose-200', onClick: () => { setUserToDelete(user); setShowDeleteModal(true); } },
+                              ].map((action, i) => (
+                                <button
+                                  key={i}
+                                  onClick={action.onClick}
+                                  aria-label={action.label}
+                                  title={action.label}
+                                  className={`w-9 h-9 rounded-xl border flex items-center justify-center transition-colors ${action.color}`}
+                                >
+                                  <action.icon className="w-4 h-4" />
+                                </button>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      </motion.div>
-                    ))}
+                        </motion.div>
+                      );
+                    })}
                   </AnimatePresence>
                 </div>
 
                 {/* Desktop Table View (shown lg and above) */}
-                <div className="hidden lg:block bg-white rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-slate-200/50 overflow-hidden">
-                  <div className="overflow-x-auto no-scrollbar">
-                    <table className="w-full border-collapse border-spacing-0">
+                <div className="hidden lg:block bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+                  <div className="px-6 py-3.5 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
+                      <span>প্রদর্শিত গ্রাহক তালিকা</span>
+                      <span className="text-slate-300" aria-hidden="true">·</span>
+                      <span className="text-bkash tabular-nums">{toBn(filteredUsers.length)} জন</span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setPrintListScope(filter === 'all' && !search && sortConfig.length === 0 ? 'all' : 'filtered');
+                        setShowAllUsersPrintModal(true);
+                        playSound('pop');
+                      }}
+                      className="text-xs font-bold text-slate-600 hover:text-bkash flex items-center gap-1.5 transition-colors"
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                      <span>প্রিন্ট / PDF এক্সপোর্ট</span>
+                    </button>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse">
                       <thead>
-                        <tr className="bg-slate-50/80 border-b border-slate-100/50">
-                          <th className="px-8 py-6 text-left">
-                            <div className="flex items-center gap-3 group relative">
-                              <div className="w-2 h-2 rounded-full bg-slate-200" />
-                              <span className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">#</span>
-                              {/* Tooltip hint for Shift+Click */}
-                              <div className="absolute bottom-full left-0 mb-2 invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-all pointer-events-none">
-                                <div className="bg-slate-900 text-white text-[6px] font-bold px-2 py-1 rounded whitespace-nowrap shadow-xl border border-slate-700 uppercase tracking-widest">
-                                  Shift + Click Header for Multi-Sort
-                                </div>
-                              </div>
-                            </div>
-                          </th>
+                        <tr className="bg-slate-50/80 border-b border-slate-200/80 text-xs font-bold text-slate-500">
+                          <th className="px-5 py-3.5 text-left w-16">ক্রম</th>
                           <th 
-                            className="px-4 py-6 text-left cursor-pointer group/th hover:bg-slate-100/50 transition-colors"
+                            className="px-4 py-3.5 text-left cursor-pointer hover:text-bkash transition-colors"
                             onClick={(e) => toggleSort('name', e.shiftKey)}
                             aria-sort={sortConfig.find(c => c.field === 'name')?.direction === 'asc' ? 'ascending' : sortConfig.find(c => c.field === 'name')?.direction === 'desc' ? 'descending' : 'none'}
                             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSort('name', e.shiftKey); } }}
                             tabIndex={0}
                             role="columnheader"
                           >
-                            <div className="flex items-center gap-2">
-                              <span className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400 group-hover/th:text-bkash">ব্যবহারকারী তথ্য</span>
+                            <div className="flex items-center gap-1.5">
+                              <span>গ্রাহকের তথ্য</span>
                               {getSortIcon('name')}
                             </div>
                           </th>
                           <th 
-                            className="px-4 py-6 text-center cursor-pointer group/th hover:bg-slate-100/50 transition-colors"
+                            className="px-4 py-3.5 text-center cursor-pointer hover:text-bkash transition-colors"
                             onClick={(e) => toggleSort('jomirPoriman', e.shiftKey)}
                             aria-sort={sortConfig.find(c => c.field === 'jomirPoriman')?.direction === 'asc' ? 'ascending' : sortConfig.find(c => c.field === 'jomirPoriman')?.direction === 'desc' ? 'descending' : 'none'}
                             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSort('jomirPoriman', e.shiftKey); } }}
                             tabIndex={0}
                             role="columnheader"
                           >
-                            <div className="flex items-center justify-center gap-2">
-                              <span className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400 group-hover/th:text-bkash">জমির পরিমাণ</span>
+                            <div className="flex items-center justify-center gap-1.5">
+                              <span>জমির পরিমাণ</span>
                               {getSortIcon('jomirPoriman')}
                             </div>
                           </th>
                           <th 
-                            className="px-4 py-6 text-center cursor-pointer group/th hover:bg-slate-100/50 transition-colors"
+                            className="px-4 py-3.5 text-right cursor-pointer hover:text-bkash transition-colors"
                             onClick={(e) => toggleSort('amount', e.shiftKey)}
                             aria-sort={sortConfig.find(c => c.field === 'amount')?.direction === 'asc' ? 'ascending' : sortConfig.find(c => c.field === 'amount')?.direction === 'desc' ? 'descending' : 'none'}
                             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSort('amount', e.shiftKey); } }}
                             tabIndex={0}
                             role="columnheader"
                           >
-                            <div className="flex items-center justify-center gap-2">
-                              <span className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400 group-hover/th:text-bkash">ব্যালেন্স / কন্ট্রাক্ট</span>
+                            <div className="flex items-center justify-end gap-1.5">
+                              <span>ব্যালেন্স ও চুক্তি</span>
                               {getSortIcon('amount')}
                             </div>
                           </th>
                           <th 
-                            className="px-4 py-6 text-center cursor-pointer group/th hover:bg-slate-100/50 transition-colors"
+                            className="px-4 py-3.5 text-center cursor-pointer hover:text-bkash transition-colors"
                             onClick={(e) => toggleSort('expireDate', e.shiftKey)}
                             aria-sort={sortConfig.find(c => c.field === 'expireDate')?.direction === 'asc' ? 'ascending' : sortConfig.find(c => c.field === 'expireDate')?.direction === 'desc' ? 'descending' : 'none'}
                             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSort('expireDate', e.shiftKey); } }}
                             tabIndex={0}
                             role="columnheader"
                           >
-                            <div className="flex items-center justify-center gap-2">
-                              <span className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400 group-hover/th:text-bkash">সময়সীমা</span>
+                            <div className="flex items-center justify-center gap-1.5">
+                              <span>সময়সীমা ও অবস্থা</span>
                               {getSortIcon('expireDate')}
                             </div>
                           </th>
-                          <th className="px-8 py-6 text-right">
-                            <span className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">কমান্ডস</span>
-                          </th>
+                          <th className="px-5 py-3.5 text-right">কমান্ডস</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-50">
+                      <tbody className="divide-y divide-slate-100">
                         <AnimatePresence mode="popLayout">
                           {filteredUsers.map((user, idx) => {
                             const daysLeft = getDaysLeft(user.expireDate);
                             const status = user.isActive === false ? 'deactivated' : getStatus(daysLeft);
+                            const statusLabel = status === 'active' ? 'সক্রিয়' : status === 'warning' ? 'সতর্কতা' : status === 'deactivated' ? 'বন্ধ' : 'মেয়াদ শেষ';
+                            const statusBadgeClass = status === 'active'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : status === 'warning'
+                              ? 'bg-amber-50 text-amber-700 border-amber-200'
+                              : status === 'deactivated'
+                              ? 'bg-slate-100 text-slate-600 border-slate-200'
+                              : 'bg-rose-50 text-rose-700 border-rose-200';
+
                             return (
                               <motion.tr 
                                 layout
@@ -1884,102 +2131,99 @@ export default function App() {
                                 animate={{ opacity: 1 }}
                                 exit={{ opacity: 0 }}
                                 key={user.id} 
-                                className={`group hover:bg-slate-50/50 transition-all duration-300 relative ${user.isActive === false ? 'opacity-70 grayscale-[0.5]' : ''}`}
+                                className={`group hover:bg-slate-50/80 transition-colors ${user.isActive === false ? 'opacity-70' : ''}`}
                               >
-                                <td className="px-8 py-6">
-                                  <div className="flex items-center gap-3">
-                                    <div className={`w-1.5 h-6 rounded-full ${
-                                      status === 'active' ? 'bg-emerald-500' : status === 'warning' ? 'bg-amber-500' : status === 'deactivated' ? 'bg-slate-400' : 'bg-bkash'
-                                    }`} />
-                                    <span className="text-[9px] font-black text-slate-300 tabular-nums">{(idx + 1).toString().padStart(2, '0')}</span>
-                                  </div>
+                                <td className="px-5 py-4 text-xs font-bold text-slate-400 tabular-nums">
+                                  {toBn((idx + 1).toString().padStart(2, '0'))}
                                 </td>
-                                <td className="px-4 py-6">
-                                  <div className="flex flex-col gap-1 max-w-[200px]">
+                                <td className="px-4 py-4">
+                                  <div className="flex flex-col gap-0.5 max-w-[230px]">
                                     <div className="flex items-center gap-2">
-                                      <div className="flex flex-col">
-                                        <h4 className="font-extrabold text-slate-800 uppercase tracking-tight text-[9px] group-hover:text-bkash transition-colors truncate">
-                                          {user.name}
-                                        </h4>
-                                        {user.nameBn && (
-                                          <p className="text-[7px] font-bold text-slate-400 truncate leading-none mt-0.5">{user.nameBn}</p>
-                                        )}
-                                      </div>
-                                      {!user.isActive && user.isActive !== undefined && (
-                                        <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-[6px] font-black uppercase tracking-tighter shrink-0">বন্ধ</span>
-                                      )}
+                                      <h4 className="font-bold text-slate-900 text-sm group-hover:text-bkash transition-colors truncate">
+                                        {user.name}
+                                      </h4>
                                     </div>
-                                    <div className="flex items-center gap-2 text-[8px] text-slate-400 font-bold">
-                                      <MapPin className="w-3 h-3 shrink-0" />
+                                    {user.nameBn && (
+                                      <p className="text-xs font-medium text-slate-500 truncate">{user.nameBn}</p>
+                                    )}
+                                    <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-0.5">
+                                      <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                                       <span className="truncate">{user.address}</span>
                                     </div>
-                                    <div className="flex items-center gap-2 text-[8px] text-bkash font-black tracking-widest mt-0.5">
-                                      <Phone className="w-3 h-3 shrink-0" />
+                                    <div className="flex items-center gap-1.5 text-xs text-bkash font-bold tabular-nums">
+                                      <Phone className="w-3.5 h-3.5 shrink-0" />
                                       <span>{toBn(user.mobile)}</span>
                                     </div>
                                   </div>
                                 </td>
-                                <td className="px-4 py-6 text-center">
-                                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-100">
-                                    <span className="font-black text-[10px] uppercase tracking-tighter">{toBn(user.jomirPoriman)}</span>
+                                <td className="px-4 py-4 text-center">
+                                  <span className="inline-flex items-center px-3 py-1 bg-emerald-50 text-emerald-700 rounded-lg border border-emerald-200/70 font-bold text-xs tabular-nums">
+                                    {toBn(user.jomirPoriman)}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-4 text-right">
+                                  <div className="flex flex-col items-end gap-0.5">
+                                    <span className="text-sm font-extrabold text-bkash tabular-nums">
+                                      {toBn(user.pwrBalance.toLocaleString())} ৳
+                                    </span>
+                                    <span className="text-[11px] font-semibold text-slate-500 tabular-nums">
+                                      চুক্তি: {toBn(user.amount.toLocaleString())} ৳
+                                    </span>
+                                    {user.collectedBalance && user.collectedBalance > 0 ? (
+                                      <span className="text-[11px] font-semibold text-emerald-600 tabular-nums">
+                                        সংগ্রহ: {toBn(user.collectedBalance.toLocaleString())} ৳
+                                      </span>
+                                    ) : null}
                                   </div>
                                 </td>
-                                <td className="px-4 py-6">
-                                  <div className="flex flex-col items-center gap-1">
-                                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-bkash-light/20 text-bkash rounded-xl border border-bkash/5">
-                                      <span className="text-[9px] font-black tabular-nums">{toBn(user.pwrBalance.toLocaleString())} ৳</span>
+                                <td className="px-4 py-4">
+                                  <div className="flex flex-col items-center gap-1.5 min-w-[130px]">
+                                    <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 tabular-nums">
+                                      <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                                      <span>{formatDate(user.expireDate)}</span>
                                     </div>
-                                    <div className="flex flex-col items-center">
-                                      <span className="text-[7px] font-black text-slate-300 uppercase tracking-widest">টোটাল: {toBn(user.amount.toLocaleString())} ৳</span>
-                                      {user.collectedBalance && user.collectedBalance > 0 && (
-                                        <span className="text-[7px] font-black text-emerald-500 uppercase tracking-widest mt-0.5">সংগ্রহ: {toBn(user.collectedBalance.toLocaleString())} ৳</span>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className={`px-2 py-0.5 rounded-md border text-[11px] font-bold ${statusBadgeClass}`}>
+                                        {statusLabel}
+                                      </span>
+                                      {status !== 'expired' && status !== 'deactivated' && (
+                                        <span className="text-[11px] font-semibold text-slate-500 tabular-nums">
+                                          ({toBn(daysLeft)} দিন)
+                                        </span>
                                       )}
                                     </div>
                                   </div>
                                 </td>
-                                <td className="px-4 py-6">
-                                  <div className="flex flex-col items-center gap-1.5 min-w-[120px]">
-                                    <div className="flex items-center gap-2 text-[10px] font-black text-slate-600 tracking-tight tabular-nums">
-                                      <Calendar className="w-3 h-3 text-slate-300" /> {formatDate(user.expireDate)}
-                                    </div>
-                                    <Countdown dateStr={user.expireDate} compact />
-                                  </div>
-                                </td>
-                                <td className="px-8 py-6 text-right">
-                                  <div className="flex items-center justify-end gap-2">
-                                    <motion.button 
-                                      whileHover={{ scale: 1.1, y: -2 }}
-                                      whileTap={{ scale: 0.9 }}
-                                      onClick={() => { setViewingUser(user); setViewMode('card'); setShowViewModal(true); }}
+                                <td className="px-5 py-4 text-right">
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <button
+                                      onClick={() => { setViewingUser(user); setViewMode('card'); setShowViewModal(true); playSound('pop'); }}
                                       aria-label="কার্ড ভিউ"
-                                      className="h-10 px-4 bg-bkash text-white rounded-2xl text-[8px] font-black uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-bkash/20"
+                                      className="h-9 px-3 bg-bkash hover:bg-bkash-dark text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs"
                                     >
-                                      <CreditCard className="w-4 h-4" /> কার্ড
-                                    </motion.button>
-                                    <div className="flex gap-1.5">
-                                      {[
-                                        { icon: Eye, label: 'বিস্তারিত তথ্য', color: 'text-slate-400 hover:bg-slate-900 border-slate-100', onClick: () => { setViewingUser(user); setViewMode('details'); setShowViewModal(true); } },
-                                        { icon: ArrowUpCircle, label: 'টাকা উত্তোলন', color: 'text-blue-500 hover:bg-blue-500 border-blue-100', onClick: () => handleOpenWithdraw(user) },
-                                        { icon: user.isActive === false ? UserCheck : UserMinus, label: user.isActive === false ? 'অ্যাক্টিভেট' : 'ডিঅ্যাক্টিভেট', color: user.isActive === false ? 'text-emerald-600 hover:bg-emerald-600 border-emerald-100' : 'text-amber-600 hover:bg-amber-600 border-amber-100', onClick: () => toggleUserStatus(user) },
-                                        { icon: TrendingUp, label: 'টাকা বাড়ানো / সংগ্রহ', color: 'text-emerald-500 hover:bg-emerald-500 border-emerald-100', onClick: () => handleOpenCollection(user) },
-                                        { icon: Edit, label: 'তথ্য সম্পাদন', color: 'text-amber-500 hover:bg-amber-500 border-amber-100', onClick: () => { setEditingUser(user); setShowAddEditModal(true); } },
-                                        { icon: Trash2, label: 'ডিলিট করুন', color: 'text-rose-500 hover:bg-rose-50 border-rose-100', onClick: () => { setUserToDelete(user); setShowDeleteModal(true); } },
-                                      ].map((action, i) => (
-                                        <motion.button 
-                                          key={i}
-                                          whileHover={{ scale: 1.1, y: -2 }}
-                                          whileTap={{ scale: 0.9 }}
-                                          onClick={() => {
-                                   action.onClick();
-                                   playSound('pop');
-                                 }}
-                                          aria-label={action.label}
-                                          className={`w-10 h-10 rounded-2xl border flex items-center justify-center transition-all bg-white hover:text-white ${action.color}`}
-                                        >
-                                          <action.icon className="w-4 h-4" />
-                                        </motion.button>
-                                      ))}
-                                    </div>
+                                      <CreditCard className="w-3.5 h-3.5" /> কার্ড
+                                    </button>
+                                    {[
+                                      { icon: Eye, label: 'বিস্তারিত তথ্য', color: 'text-slate-600 hover:bg-slate-900 border-slate-200', onClick: () => { setViewingUser(user); setViewMode('details'); setShowViewModal(true); } },
+                                      { icon: ArrowUpCircle, label: 'টাকা উত্তোলন', color: 'text-blue-600 hover:bg-blue-600 border-blue-200', onClick: () => handleOpenWithdraw(user) },
+                                      { icon: user.isActive === false ? UserCheck : UserMinus, label: user.isActive === false ? 'অ্যাক্টিভেট' : 'ডিঅ্যাক্টিভেট', color: user.isActive === false ? 'text-emerald-600 hover:bg-emerald-600 border-emerald-200' : 'text-amber-600 hover:bg-amber-600 border-amber-200', onClick: () => toggleUserStatus(user) },
+                                      { icon: TrendingUp, label: 'টাকা বাড়ানো / সংগ্রহ', color: 'text-emerald-600 hover:bg-emerald-600 border-emerald-200', onClick: () => handleOpenCollection(user) },
+                                      { icon: Edit, label: 'তথ্য সম্পাদন', color: 'text-amber-600 hover:bg-amber-500 border-amber-200', onClick: () => { setEditingUser(user); setShowAddEditModal(true); } },
+                                      { icon: Trash2, label: 'ডিলিট করুন', color: 'text-rose-600 hover:bg-rose-600 border-rose-200', onClick: () => { setUserToDelete(user); setShowDeleteModal(true); } },
+                                    ].map((action, i) => (
+                                      <button
+                                        key={i}
+                                        onClick={() => {
+                                          action.onClick();
+                                          playSound('pop');
+                                        }}
+                                        aria-label={action.label}
+                                        title={action.label}
+                                        className={`w-9 h-9 rounded-xl border flex items-center justify-center transition-colors bg-white hover:text-white ${action.color}`}
+                                      >
+                                        <action.icon className="w-4 h-4" />
+                                      </button>
+                                    ))}
                                   </div>
                                 </td>
                               </motion.tr>
@@ -1992,20 +2236,23 @@ export default function App() {
                 </div>
               </>
             ) : (
-              <motion.div 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="bg-white rounded-[3rem] p-24 text-center border-2 border-dashed border-slate-100 shadow-inner"
-              >
-                <div className="w-24 h-24 rounded-full bg-slate-50 flex items-center justify-center mx-auto mb-8 relative">
-                  <div className="absolute inset-0 bg-bkash/5 rounded-full blur-2xl animate-pulse" />
-                  <Search className="w-10 h-10 text-slate-200 relative z-10" />
+              <div className="bg-white rounded-2xl p-16 text-center border border-dashed border-slate-300">
+                <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
+                  <Search className="w-7 h-7 text-slate-400" />
                 </div>
-                <h3 className="text-slate-800 font-black uppercase tracking-[0.4em] text-[10px] mb-3">No Records Found</h3>
-                <p className="text-slate-400 font-bold text-[8px] uppercase tracking-widest max-w-[200px] mx-auto leading-relaxed">
-                  We couldn't find any matches for your current search or filters.
+                <h3 className="text-slate-800 font-bold text-base mb-1">কোনো তথ্য পাওয়া যায়নি</h3>
+                <p className="text-slate-500 text-xs max-w-xs mx-auto mb-5">
+                  আপনার বর্তমান সার্চ বা ফিল্টারের সাথে মিলে এমন কোনো গ্রাহক রেকর্ড নেই।
                 </p>
-              </motion.div>
+                {(search || filter !== 'all') && (
+                  <button
+                    onClick={() => { setSearch(''); setFilter('all'); }}
+                    className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors"
+                  >
+                    সব রেকর্ড দেখুন
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -2065,6 +2312,516 @@ export default function App() {
                 >
                   বাতিল করুন
                 </motion.button>
+              </div>
+            </div>
+          </Modal>
+        )}
+
+        {showExpiredPdfModal && (
+          <Modal
+            title="মেয়াদ উত্তীর্ণ তালিকা (PDF)"
+            onClose={() => setShowExpiredPdfModal(false)}
+            isLoading={isProcessing}
+            playSound={playSound}
+            isSuccess={isSuccess}
+            isError={isError}
+            errorMessage={errorMessage}
+          >
+            <div className="space-y-6">
+              <div className="flex justify-between items-center bg-rose-50 border border-rose-100 p-4 rounded-xl">
+                <div>
+                  <h3 className="text-xs font-black text-rose-800 uppercase tracking-tight">মেয়াদ উত্তীর্ণ ইউজার সংখ্যা</h3>
+                  <p className="text-slate-500 font-bold text-[9px] uppercase tracking-widest mt-0.5">Total Expired Tenures</p>
+                </div>
+                <div className="text-right">
+                  <span className="px-3.5 py-1.5 bg-rose-600 text-white rounded-xl text-xs font-black">
+                    {toBn(users.filter(u => getDaysLeft(u.expireDate) < 0).length)} জন
+                  </span>
+                </div>
+              </div>
+
+              {/* PDF Preview Area */}
+              <div className="border border-slate-100 rounded-2xl overflow-hidden shadow-inner bg-slate-50/50 p-2">
+                <div className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-2 px-2">ডকুমেন্ট প্রিভিউ (Document Preview)</div>
+                <div className="max-h-[300px] overflow-y-auto overflow-x-auto p-1 custom-scrollbar">
+                  <div 
+                    id="expired-print-area" 
+                    className="active-print-sheet bg-white p-6 rounded-xl shadow-sm border border-slate-200/50 mx-auto" 
+                    style={{ width: '700px' }}
+                  >
+                    {/* Header */}
+                    <div className="flex justify-between items-start pb-4 border-b border-rose-200 mb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-rose-600 rounded-xl flex items-center justify-center text-white">
+                          <Clock className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h1 className="text-md font-black text-rose-700 leading-tight">মেয়াদ উত্তীর্ণ গ্রাহক তালিকা</h1>
+                          <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">LAND EXPIRED TENURE SUMMARY</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest leading-none">তারিখ (Date)</p>
+                        <p className="text-[10px] font-black text-slate-800 mt-1">{toBn(new Date().toLocaleDateString('bn-BD'))}</p>
+                      </div>
+                    </div>
+
+                    {/* Table */}
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-slate-200 text-slate-400 font-black text-[8px] uppercase tracking-wider text-left">
+                          <th className="py-2 px-1 text-center w-10">ক্রম</th>
+                          <th className="py-2 px-1">গ্রাহকের নাম ও মোবাইল</th>
+                          <th className="py-2 px-1">ঠিকানা</th>
+                          <th className="py-2 px-1 text-right">জমির পরিমাণ</th>
+                          <th className="py-2 px-1 text-right">চুক্তির টাকা</th>
+                          <th className="py-2 px-1 text-right">শেষ তারিখ</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {users.filter(u => getDaysLeft(u.expireDate) < 0).length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="py-8 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                              কোনো মেয়াদ উত্তীর্ণ ইউজার পাওয়া যায়নি
+                            </td>
+                          </tr>
+                        ) : (
+                          users.filter(u => getDaysLeft(u.expireDate) < 0).map((u, index) => (
+                            <tr key={u.id} className="border-b border-slate-100 text-[10px]">
+                              <td className="py-2 px-1 text-center font-bold text-slate-400 tabular-nums">{toBn(index + 1)}</td>
+                              <td className="py-2 px-1">
+                                <div className="font-extrabold text-slate-800 leading-tight">{u.nameBn || u.name}</div>
+                                <div className="text-[8px] text-slate-400 font-bold tabular-nums">{toBn(u.mobile)}</div>
+                              </td>
+                              <td className="py-2 px-1 text-slate-500 font-medium truncate max-w-[120px]">{u.address}</td>
+                              <td className="py-2 px-1 text-right font-extrabold text-slate-600 tabular-nums">{toBn(u.jomirPoriman)}</td>
+                              <td className="py-2 px-1 text-right font-black text-rose-600 tabular-nums">{toBn(u.amount.toLocaleString())} ৳</td>
+                              <td className="py-2 px-1 text-right font-black text-rose-700 tabular-nums">{toBn(formatDate(u.expireDate))}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+
+                    {/* Footer note inside preview */}
+                    <div className="mt-8 pt-4 border-t border-slate-100 flex justify-between items-center text-[8px]">
+                      <div>
+                        <p className="font-bold text-slate-400 uppercase tracking-widest">সিস্টেম রিপোর্ট (System Report)</p>
+                        <p className="text-slate-300 font-medium mt-0.5">Automated Tenant Ledger Management</p>
+                      </div>
+                      <div className="w-32 border-t border-slate-200 pt-1 text-center font-bold text-slate-400 uppercase tracking-widest">
+                        অনুমতি স্বাক্ষর
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="grid grid-cols-3 gap-3 no-print">
+                <button
+                  onClick={() => { playSound('click'); window.focus(); window.print(); }}
+                  disabled={users.filter(u => getDaysLeft(u.expireDate) < 0).length === 0}
+                  className="py-3.5 bg-slate-900 text-white rounded-xl font-bold text-xs hover:bg-slate-800 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Printer className="w-4 h-4" /> প্রিন্ট
+                </button>
+                <button
+                  onClick={handleDownloadExpiredPDF}
+                  disabled={users.filter(u => getDaysLeft(u.expireDate) < 0).length === 0}
+                  className="py-3.5 bg-rose-600 text-white rounded-xl font-bold text-xs hover:bg-rose-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <FileDown className="w-4 h-4" /> PDF ডাউনলোড
+                </button>
+                <button
+                  onClick={() => setShowExpiredPdfModal(false)}
+                  className="py-3.5 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl font-bold text-xs transition-colors"
+                >
+                  ফিরে যান
+                </button>
+              </div>
+            </div>
+          </Modal>
+        )}
+
+        {showAllUsersPrintModal && (
+          <Modal
+            title="সকল গ্রাহক তালিকা প্রিন্ট ও PDF"
+            size="wide"
+            onClose={() => setShowAllUsersPrintModal(false)}
+            isLoading={isProcessing}
+            playSound={playSound}
+            isSuccess={isSuccess}
+            isError={isError}
+            errorMessage={errorMessage}
+          >
+            <div className="space-y-5">
+              {/* Controls Toolbar */}
+              <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 space-y-4 no-print">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold text-slate-700 mb-1.5">তালিকার ধরন নির্বাচন করুন</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        { id: 'all', label: `সকল গ্রাহক (${toBn(users.length)})` },
+                        { id: 'filtered', label: `বর্তমান ফিল্টার (${toBn(filteredUsers.length)})` },
+                        { id: 'active', label: 'সক্রিয়' },
+                        { id: 'warning', label: 'সতর্কতা' },
+                        { id: 'expired', label: 'মেয়াদ শেষ' },
+                        { id: 'deactivated', label: 'বন্ধ' },
+                      ].map((opt) => (
+                        <button
+                          key={opt.id}
+                          onClick={() => {
+                            setPrintListScope(opt.id as any);
+                            playSound('click');
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                            printListScope === opt.id
+                              ? 'bg-bkash text-white shadow-xs'
+                              : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-300'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-bold text-slate-700 mb-1.5">পেজ লেআউট (A4)</p>
+                    <div className="inline-flex bg-white p-1 rounded-xl border border-slate-200">
+                      <button
+                        onClick={() => { setPrintOrientation('portrait'); playSound('click'); }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                          printOrientation === 'portrait' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        খাড়া (Portrait)
+                      </button>
+                      <button
+                        onClick={() => { setPrintOrientation('landscape'); playSound('click'); }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                          printOrientation === 'landscape' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        আড়াআড়ি (Landscape)
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Column toggles */}
+                <div className="pt-3 border-t border-slate-200/70 flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-bold text-slate-500 flex items-center gap-1 mr-1">
+                    <SlidersHorizontal className="w-3.5 h-3.5" /> কলামসমূহ:
+                  </span>
+                  {[
+                    { key: 'chukirdhari', label: 'চুক্তিধারী' },
+                    { key: 'address', label: 'ঠিকানা' },
+                    { key: 'land', label: 'জমির পরিমাণ' },
+                    { key: 'contract', label: 'চুক্তির টাকা' },
+                    { key: 'balance', label: 'পাওয়ার ব্যালেন্স' },
+                    { key: 'collected', label: 'আদায়কৃত টাকা' },
+                    { key: 'expireDate', label: 'মেয়াদ শেষ' },
+                    { key: 'status', label: 'অবস্থা' },
+                  ].map((col) => {
+                    const active = printColumns[col.key as keyof typeof printColumns];
+                    return (
+                      <button
+                        key={col.key}
+                        type="button"
+                        onClick={() => {
+                          setPrintColumns(prev => ({ ...prev, [col.key]: !prev[col.key as keyof typeof printColumns] }));
+                          playSound('click');
+                        }}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all flex items-center gap-1 ${
+                          active
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            : 'bg-white text-slate-400 border-slate-200'
+                        }`}
+                      >
+                        {active && <Check className="w-3 h-3" />}
+                        {col.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Document Preview Container */}
+              <div className="border border-slate-200 rounded-2xl bg-slate-100/80 p-3 sm:p-4">
+                <div className="flex items-center justify-between mb-2 px-1 no-print">
+                  <span className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
+                    <LayoutList className="w-3.5 h-3.5 text-bkash" /> প্রিন্ট প্রিভিউ ({toBn(printableUsers.length)} জন গ্রাহক)
+                  </span>
+                  <span className="text-[11px] font-medium text-slate-400">
+                    {printOrientation === 'landscape' ? 'A4 Landscape' : 'A4 Portrait'}
+                  </span>
+                </div>
+
+                <div className="max-h-[460px] overflow-auto custom-scrollbar rounded-xl">
+                  <div
+                    id="all-users-print-area"
+                    className="active-print-sheet bg-white p-6 sm:p-8 mx-auto border border-slate-200 shadow-sm text-slate-900"
+                    style={{ width: printOrientation === 'landscape' ? '960px' : '740px' }}
+                  >
+                    {/* Formal Letterhead */}
+                    <div className="flex justify-between items-start pb-5 border-b-2 border-slate-900 mb-5">
+                      <div className="flex items-center gap-3.5">
+                        <div className="w-12 h-12 bg-bkash rounded-xl flex items-center justify-center text-white shrink-0">
+                          <Landmark className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <h1 className="text-xl font-extrabold text-slate-900 tracking-tight leading-tight">
+                            সকল গ্রাহক ও চুক্তি তালিকা
+                          </h1>
+                          <p className="text-xs font-semibold text-slate-500 mt-0.5">
+                            LandManager Pro · মাস্টার লেজার প্রতিবেদন
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right space-y-0.5">
+                        <p className="text-xs font-bold text-slate-800">
+                          তালিকা:{' '}
+                          <span className="text-bkash">
+                            {printListScope === 'all'
+                              ? 'সকল গ্রাহক'
+                              : printListScope === 'filtered'
+                              ? 'ফিল্টারকৃত তালিকা'
+                              : printListScope === 'active'
+                              ? 'সক্রিয় গ্রাহক'
+                              : printListScope === 'warning'
+                              ? 'সতর্কতা (৩০ দিন)'
+                              : printListScope === 'expired'
+                              ? 'মেয়াদ উত্তীর্ণ'
+                              : 'বন্ধ একাউন্ট'}
+                          </span>
+                        </p>
+                        <p className="text-[11px] font-medium text-slate-500 tabular-nums">
+                          প্রিন্ট তারিখ: {toBn(new Date().toLocaleDateString('bn-BD'))} · {liveTime.toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                        <p className="text-[11px] font-medium text-slate-500 tabular-nums">
+                          মোট রেকর্ড: {toBn(printableUsers.length)} জন
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Executive Summary Strip inside Print Sheet */}
+                    <div className="grid grid-cols-4 gap-3 mb-5">
+                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                        <p className="text-[10px] font-bold text-slate-500">মোট গ্রাহক</p>
+                        <p className="text-base font-extrabold text-slate-900 tabular-nums mt-0.5">
+                          {toBn(printableUsers.length)} জন
+                        </p>
+                      </div>
+                      <div className="p-3 rounded-xl bg-bkash-light/60 border border-bkash/20">
+                        <p className="text-[10px] font-bold text-bkash">মোট চুক্তির টাকা</p>
+                        <p className="text-base font-extrabold text-bkash tabular-nums mt-0.5">
+                          {toBn(printSummary.totalAmount.toLocaleString())} ৳
+                        </p>
+                      </div>
+                      <div className="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                        <p className="text-[10px] font-bold text-slate-500">মোট পাওয়ার ব্যালেন্স</p>
+                        <p className="text-base font-extrabold text-slate-900 tabular-nums mt-0.5">
+                          {toBn(printSummary.totalBalance.toLocaleString())} ৳
+                        </p>
+                      </div>
+                      <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200">
+                        <p className="text-[10px] font-bold text-emerald-700">মোট আদায়কৃত টাকা</p>
+                        <p className="text-base font-extrabold text-emerald-700 tabular-nums mt-0.5">
+                          {toBn(printSummary.totalCollected.toLocaleString())} ৳
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Master User Table */}
+                    <table className="w-full text-left border-collapse border border-slate-200">
+                      <thead>
+                        <tr className="bg-slate-900 text-white text-[11px] font-bold">
+                          <th className="py-2.5 px-2.5 text-center border-r border-slate-700 w-10">ক্রম</th>
+                          <th className="py-2.5 px-2.5 border-r border-slate-700">গ্রাহকের নাম ও মোবাইল</th>
+                          {printColumns.chukirdhari && (
+                            <th className="py-2.5 px-2.5 border-r border-slate-700">চুক্তিধারী</th>
+                          )}
+                          {printColumns.address && (
+                            <th className="py-2.5 px-2.5 border-r border-slate-700">ঠিকানা</th>
+                          )}
+                          {printColumns.land && (
+                            <th className="py-2.5 px-2.5 text-center border-r border-slate-700">জমি</th>
+                          )}
+                          {printColumns.contract && (
+                            <th className="py-2.5 px-2.5 text-right border-r border-slate-700">চুক্তি (৳)</th>
+                          )}
+                          {printColumns.balance && (
+                            <th className="py-2.5 px-2.5 text-right border-r border-slate-700">ব্যালেন্স (৳)</th>
+                          )}
+                          {printColumns.collected && (
+                            <th className="py-2.5 px-2.5 text-right border-r border-slate-700">আদায় (৳)</th>
+                          )}
+                          {printColumns.expireDate && (
+                            <th className="py-2.5 px-2.5 text-center border-r border-slate-700">মেয়াদ শেষ</th>
+                          )}
+                          {printColumns.status && (
+                            <th className="py-2.5 px-2.5 text-center">অবস্থা</th>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {printableUsers.length === 0 ? (
+                          <tr>
+                            <td colSpan={10} className="py-10 text-center text-xs font-bold text-slate-400">
+                              এই ফিল্টারে কোনো গ্রাহক পাওয়া যায়নি
+                            </td>
+                          </tr>
+                        ) : (
+                          printableUsers.map((u, index) => {
+                            const daysLeft = getDaysLeft(u.expireDate);
+                            const st = u.isActive === false ? 'deactivated' : getStatus(daysLeft);
+                            const stLabel = st === 'active' ? 'সক্রিয়' : st === 'warning' ? 'সতর্কতা' : st === 'deactivated' ? 'বন্ধ' : 'মেয়াদ শেষ';
+                            const stClass = st === 'active'
+                              ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                              : st === 'warning'
+                              ? 'text-amber-700 bg-amber-50 border-amber-200'
+                              : st === 'deactivated'
+                              ? 'text-slate-600 bg-slate-100 border-slate-200'
+                              : 'text-rose-700 bg-rose-50 border-rose-200';
+
+                            return (
+                              <tr key={u.id} className="border-b border-slate-200 even:bg-slate-50/70 text-[11px]">
+                                <td className="py-2 px-2 text-center font-bold text-slate-500 border-r border-slate-200 tabular-nums">
+                                  {toBn(index + 1)}
+                                </td>
+                                <td className="py-2 px-2.5 border-r border-slate-200">
+                                  <div className="font-bold text-slate-900 leading-tight">{u.name}</div>
+                                  {u.nameBn && <div className="text-[10px] text-slate-500 leading-tight">{u.nameBn}</div>}
+                                  <div className="text-[10px] font-semibold text-bkash tabular-nums mt-0.5">{toBn(u.mobile)}</div>
+                                </td>
+                                {printColumns.chukirdhari && (
+                                  <td className="py-2 px-2.5 border-r border-slate-200">
+                                    <div className="font-semibold text-slate-800">{u.chukirdharirName || '---'}</div>
+                                    {u.chukirdharirNameBn && <div className="text-[10px] text-slate-500">{u.chukirdharirNameBn}</div>}
+                                  </td>
+                                )}
+                                {printColumns.address && (
+                                  <td className="py-2 px-2.5 text-slate-600 border-r border-slate-200 max-w-[140px] break-words">
+                                    {u.address}
+                                  </td>
+                                )}
+                                {printColumns.land && (
+                                  <td className="py-2 px-2 text-center font-bold text-slate-700 border-r border-slate-200 tabular-nums whitespace-nowrap">
+                                    {toBn(u.jomirPoriman)}
+                                  </td>
+                                )}
+                                {printColumns.contract && (
+                                  <td className="py-2 px-2.5 text-right font-bold text-slate-900 border-r border-slate-200 tabular-nums whitespace-nowrap">
+                                    {toBn(u.amount.toLocaleString())}
+                                  </td>
+                                )}
+                                {printColumns.balance && (
+                                  <td className="py-2 px-2.5 text-right font-extrabold text-bkash border-r border-slate-200 tabular-nums whitespace-nowrap">
+                                    {toBn(u.pwrBalance.toLocaleString())}
+                                  </td>
+                                )}
+                                {printColumns.collected && (
+                                  <td className="py-2 px-2.5 text-right font-bold text-emerald-700 border-r border-slate-200 tabular-nums whitespace-nowrap">
+                                    {toBn((u.collectedBalance || 0).toLocaleString())}
+                                  </td>
+                                )}
+                                {printColumns.expireDate && (
+                                  <td className="py-2 px-2 text-center font-semibold text-slate-700 border-r border-slate-200 tabular-nums whitespace-nowrap">
+                                    {toBn(formatDate(u.expireDate))}
+                                  </td>
+                                )}
+                                {printColumns.status && (
+                                  <td className="py-2 px-2 text-center whitespace-nowrap">
+                                    <span className={`inline-block px-2 py-0.5 rounded border text-[10px] font-bold ${stClass}`}>
+                                      {stLabel}
+                                    </span>
+                                  </td>
+                                )}
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                      {printableUsers.length > 0 && (
+                        <tfoot>
+                          <tr className="bg-slate-100 border-t-2 border-slate-900 text-[11px] font-extrabold text-slate-900">
+                            <td
+                              colSpan={
+                                2 +
+                                (printColumns.chukirdhari ? 1 : 0) +
+                                (printColumns.address ? 1 : 0) +
+                                (printColumns.land ? 1 : 0)
+                              }
+                              className="py-2.5 px-3 text-right border-r border-slate-300"
+                            >
+                              সর্বমোট ({toBn(printableUsers.length)} জন):
+                            </td>
+                            {printColumns.contract && (
+                              <td className="py-2.5 px-2.5 text-right border-r border-slate-300 tabular-nums whitespace-nowrap">
+                                {toBn(printSummary.totalAmount.toLocaleString())} ৳
+                              </td>
+                            )}
+                            {printColumns.balance && (
+                              <td className="py-2.5 px-2.5 text-right text-bkash border-r border-slate-300 tabular-nums whitespace-nowrap">
+                                {toBn(printSummary.totalBalance.toLocaleString())} ৳
+                              </td>
+                            )}
+                            {printColumns.collected && (
+                              <td className="py-2.5 px-2.5 text-right text-emerald-700 border-r border-slate-300 tabular-nums whitespace-nowrap">
+                                {toBn(printSummary.totalCollected.toLocaleString())} ৳
+                              </td>
+                            )}
+                            {printColumns.expireDate && <td className="py-2.5 px-2 border-r border-slate-300" />}
+                            {printColumns.status && <td className="py-2.5 px-2" />}
+                          </tr>
+                        </tfoot>
+                      )}
+                    </table>
+
+                    {/* Official Signatures */}
+                    <div className="mt-10 pt-6 border-t border-slate-200 flex justify-between items-end text-[11px]">
+                      <div>
+                        <p className="font-bold text-slate-600">LandManager Pro · অফিসিয়াল কপি</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">প্রস্তুতকারী: {currentUser.displayName || currentUser.email}</p>
+                      </div>
+                      <div className="flex gap-10">
+                        <div className="w-32 border-t border-slate-400 pt-1 text-center font-bold text-slate-600">
+                          প্রস্তুতকারক
+                        </div>
+                        <div className="w-36 border-t border-slate-900 pt-1 text-center font-bold text-slate-900">
+                          কর্তৃপক্ষ সিল ও স্বাক্ষর
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 no-print">
+                <button
+                  onClick={handlePrintAllUsers}
+                  disabled={printableUsers.length === 0}
+                  className="py-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                >
+                  <Printer className="w-4 h-4" /> প্রিন্ট করুন (Print)
+                </button>
+                <button
+                  onClick={handleDownloadAllUsersPDF}
+                  disabled={printableUsers.length === 0}
+                  className="py-3.5 bg-bkash hover:bg-bkash-dark text-white rounded-xl font-bold text-xs transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-bkash/20"
+                >
+                  <FileDown className="w-4 h-4" /> PDF ডাউনলোড করুন
+                </button>
+                <button
+                  onClick={() => setShowAllUsersPrintModal(false)}
+                  className="py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition-colors"
+                >
+                  বন্ধ করুন
+                </button>
               </div>
             </div>
           </Modal>
@@ -2247,7 +3004,7 @@ export default function App() {
                 ))}
               </div>
 
-            <div id="print-area" className="w-full max-w-full overflow-x-hidden p-1">
+            <div id="print-area" className="active-print-sheet w-full max-w-full overflow-x-hidden p-1">
               {viewMode === 'details' ? (
                 <div id="print-details" className="space-y-6">
                   <div className="bg-slate-50 rounded-3xl p-6 border border-slate-100">
@@ -3283,25 +4040,45 @@ export default function App() {
                       </div>
                     </div>
 
-                    <div className="pt-6 border-t border-slate-100 flex gap-4">
-                      <motion.button
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
+                    <div className="pt-6 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <button
                         onClick={async () => {
                           setIsProcessing(true);
-                          // Artificial delay for user request
                           await new Promise(resolve => setTimeout(resolve, 1000));
                           downloadCSV(reportData, `Report_${reportRange.start}_to_${reportRange.end}.csv`);
                           setIsSuccess(true);
-                          await new Promise(resolve => setTimeout(resolve, 3000));
+                          await new Promise(resolve => setTimeout(resolve, 2000));
                           setIsSuccess(false);
                           setIsProcessing(false);
                           setShowReportsModal(false);
                         }}
-                        className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] shadow-xl shadow-slate-200 hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
+                        className="py-3.5 bg-slate-900 text-white rounded-xl font-bold text-xs shadow-sm hover:bg-slate-800 transition-colors flex items-center justify-center gap-2"
                       >
-                        <FileDown className="w-4 h-4" /> CSV এক্সপোর্ট করুন
-                      </motion.button>
+                        <FileDown className="w-4 h-4" /> CSV এক্সপোর্ট
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setShowReportsModal(false);
+                          setPrintListScope('all');
+                          setShowAllUsersPrintModal(true);
+                          playSound('pop');
+                        }}
+                        className="py-3.5 bg-bkash hover:bg-bkash-dark text-white rounded-xl font-bold text-xs shadow-sm transition-colors flex items-center justify-center gap-2"
+                      >
+                        <Printer className="w-4 h-4" /> সকল তালিকা প্রিন্ট / PDF
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setShowReportsModal(false);
+                          setShowExpiredPdfModal(true);
+                          playSound('pop');
+                        }}
+                        className="py-3.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-xs shadow-sm transition-colors flex items-center justify-center gap-2"
+                      >
+                        <FileDown className="w-4 h-4" /> মেয়াদ উত্তীর্ণ PDF
+                      </button>
                     </div>
                   </>
                 );
@@ -3489,7 +4266,7 @@ export default function App() {
 }
 
 // Modal Component Helper
-function Modal({ title, children, onClose, isLoading, isSuccess, isError, errorMessage, playSound }: { title: string, children: React.ReactNode, onClose: () => void, isLoading?: boolean, isSuccess?: boolean, isError?: boolean, errorMessage?: string, playSound?: (type: any) => void }) {
+function Modal({ title, children, onClose, isLoading, isSuccess, isError, errorMessage, playSound, size = 'default' }: { title: string, children: React.ReactNode, onClose: () => void, isLoading?: boolean, isSuccess?: boolean, isError?: boolean, errorMessage?: string, playSound?: (type: any) => void, size?: 'default' | 'wide' }) {
   const modalId = React.useId();
   
   const handleClose = () => {
@@ -3513,7 +4290,7 @@ function Modal({ title, children, onClose, isLoading, isSuccess, isError, errorM
         animate={{ y: 0 }}
         exit={{ y: "100%" }}
         transition={{ type: "spring", damping: 25, stiffness: 400 }}
-        className="bg-white rounded-t-[2rem] sm:rounded-[2.5rem] shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto p-6 sm:p-8 lg:p-10 relative overflow-x-hidden"
+        className={`bg-white rounded-t-[2rem] sm:rounded-3xl shadow-2xl w-full ${size === 'wide' ? 'max-w-5xl' : 'max-w-2xl'} max-h-[92vh] overflow-y-auto p-5 sm:p-7 lg:p-8 relative overflow-x-hidden`}
         onClick={(e) => e.stopPropagation()}
       >
         {isLoading && <ActionSpinner isSuccess={isSuccess} isError={isError} errorMessage={errorMessage} />}
