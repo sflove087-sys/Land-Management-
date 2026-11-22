@@ -71,7 +71,7 @@ service cloud.firestore {
          isValidUser(request.resource.data))
       );
 
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() || (isVerified() && isValidId(userId));
 
       match /history/{historyId} {
         allow read, write: if isVerified();

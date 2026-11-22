@@ -657,9 +657,7 @@ export default function App() {
   // Form Auto-save State
   const [formValues, setFormValues] = useState({
     name: '',
-    nameBn: '',
     chukirdharirName: '',
-    chukirdharirNameBn: '',
     mobile: '',
     address: '',
     jomirPoriman: '',
@@ -669,13 +667,10 @@ export default function App() {
     terms: ''
   });
   const [showRestorePrompt, setShowRestorePrompt] = useState(false);
-  const [isTransliterating, setIsTransliterating] = useState<{[key: string]: boolean}>({});
 
   const initialAddState = useMemo(() => ({
     name: '',
-    nameBn: '',
     chukirdharirName: '',
-    chukirdharirNameBn: '',
     mobile: '',
     address: '',
     jomirPoriman: '',
@@ -685,41 +680,13 @@ export default function App() {
     terms: ''
   }), []);
 
-  const handleTransliterate = async (fieldName: 'name' | 'chukirdharirName') => {
-    const textToConvert = formValues[fieldName];
-    if (!textToConvert || textToConvert.trim() === '') return;
-
-    setIsTransliterating(prev => ({ ...prev, [fieldName]: true }));
-    try {
-      const response = await fetch('/api/transliterate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: textToConvert })
-      });
-      const data = await response.json();
-      if (data.result) {
-        setFormValues(prev => ({
-          ...prev,
-          [`${fieldName}Bn`]: data.result
-        }));
-        playSound('pop');
-      }
-    } catch (error) {
-      console.error("Transliteration failed:", error);
-    } finally {
-      setIsTransliterating(prev => ({ ...prev, [fieldName]: false }));
-    }
-  };
-
   // Handle opening modal and checking for draft
   useEffect(() => {
     if (showAddEditModal) {
       if (editingUser) {
         const initialState = {
           name: editingUser.name || '',
-          nameBn: editingUser.nameBn || '',
           chukirdharirName: editingUser.chukirdharirName || '',
-          chukirdharirNameBn: editingUser.chukirdharirNameBn || '',
           mobile: editingUser.mobile || '',
           address: editingUser.address || '',
           jomirPoriman: editingUser.jomirPoriman || '',
@@ -995,17 +962,19 @@ export default function App() {
     // Artificial delay for user request
     await new Promise(resolve => setTimeout(resolve, 1000));
     
+    const trimmedName = formValues.name.trim();
+    const trimmedChukirdhari = formValues.chukirdharirName.trim();
     const userData = {
-      name: formValues.name || '',
-      nameBn: formValues.nameBn || '',
+      name: trimmedName,
+      nameBn: editingUser && trimmedName === (editingUser.name || '').trim() ? (editingUser.nameBn || '') : '',
       address: formValues.address || '',
       mobile: formValues.mobile || '',
       jomirPoriman: formValues.jomirPoriman || '',
       amount: parseFloat(formValues.amount) || 0,
       expireDate: formValues.expireDate || '',
       pwrBalance: parseFloat(formValues.pwrBalance) || 0,
-      chukirdharirName: formValues.chukirdharirName || '',
-      chukirdharirNameBn: formValues.chukirdharirNameBn || '',
+      chukirdharirName: trimmedChukirdhari,
+      chukirdharirNameBn: editingUser && trimmedChukirdhari === (editingUser.chukirdharirName || '').trim() ? (editingUser.chukirdharirNameBn || '') : '',
       isActive: editingUser ? (editingUser.isActive ?? true) : true,
       withdrawals: editingUser ? (editingUser.withdrawals || []) : [],
       terms: formValues.terms || '',
@@ -1021,16 +990,21 @@ export default function App() {
       }
       playSound('success');
       setIsSuccess(true);
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      await new Promise(resolve => setTimeout(resolve, 2000));
       setIsSuccess(false);
       setIsProcessing(false);
       setShowAddEditModal(false);
       setEditingUser(null);
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'users');
+      try {
+        handleFirestoreError(error, OperationType.WRITE, 'users');
+      } catch (loggedError) {
+        console.error(loggedError);
+      }
+      playSound('error');
       setErrorMessage(getFriendlyErrorMessage(error));
       setIsError(true);
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await new Promise(resolve => setTimeout(resolve, 4000));
       setIsError(false);
       setErrorMessage('');
       setIsProcessing(false);
@@ -1038,21 +1012,34 @@ export default function App() {
   };
 
   const deleteUser = async (id: string) => {
+    if (!id || isProcessing) return;
+    setIsError(false);
+    setErrorMessage('');
+    setIsSuccess(false);
     setIsProcessing(true);
-    // Artificial delay for user request
-    await new Promise(resolve => setTimeout(resolve, 1000));
     try {
       await deleteDoc(doc(db, 'users', id));
+      localStorage.removeItem(`draft_edit_${id}`);
+      if (viewingUser?.id === id) {
+        setViewingUser(null);
+        setShowViewModal(false);
+      }
+      playSound('success');
       setIsSuccess(true);
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      await new Promise(resolve => setTimeout(resolve, 1500));
       setIsSuccess(false);
       setShowDeleteModal(false);
       setUserToDelete(null);
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `users/${id}`);
+      try {
+        handleFirestoreError(error, OperationType.DELETE, `users/${id}`);
+      } catch (loggedError) {
+        console.error(loggedError);
+      }
+      playSound('error');
       setErrorMessage(getFriendlyErrorMessage(error));
       setIsError(true);
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await new Promise(resolve => setTimeout(resolve, 4000));
       setIsError(false);
       setErrorMessage('');
     } finally {
@@ -1104,10 +1091,15 @@ export default function App() {
       setShowCollectionModal(false);
       setCollectingUser(null);
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `users/${collectingUser.id}`);
+      try {
+        handleFirestoreError(error, OperationType.WRITE, `users/${collectingUser.id}`);
+      } catch (loggedError) {
+        console.error(loggedError);
+      }
+      playSound('error');
       setErrorMessage(getFriendlyErrorMessage(error));
       setIsError(true);
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await new Promise(resolve => setTimeout(resolve, 4000));
       setIsError(false);
       setErrorMessage('');
       setIsProcessing(false);
@@ -1139,7 +1131,12 @@ export default function App() {
       await new Promise(resolve => setTimeout(resolve, 1500));
       setIsSuccess(false);
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `users/${user.id}`);
+      try {
+        handleFirestoreError(error, OperationType.WRITE, `users/${user.id}`);
+      } catch (loggedError) {
+        console.error(loggedError);
+      }
+      playSound('error');
       setErrorMessage(getFriendlyErrorMessage(error));
       setIsError(true);
       await new Promise(resolve => setTimeout(resolve, 3000));
@@ -1214,10 +1211,15 @@ export default function App() {
       setShowWithdrawModal(false);
       setWithdrawingUser(null);
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, `users/${withdrawingUser.id}`);
+      try {
+        handleFirestoreError(error, OperationType.WRITE, `users/${withdrawingUser.id}`);
+      } catch (loggedError) {
+        console.error(loggedError);
+      }
+      playSound('error');
       setErrorMessage(getFriendlyErrorMessage(error));
       setIsError(true);
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await new Promise(resolve => setTimeout(resolve, 4000));
       setIsError(false);
       setErrorMessage('');
       setIsProcessing(false);
@@ -2876,51 +2878,18 @@ export default function App() {
               )}
             </AnimatePresence>
 
-            <form onSubmit={handleAddEdit} className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+            <form onSubmit={handleAddEdit} className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
               <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-[8px] font-bold text-slate-400 uppercase flex items-center gap-1.5"><Users className="w-3 h-3" /> পূর্ণ নাম (English) *</label>
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    type="button"
-                    onClick={() => handleTransliterate('name')}
-                    disabled={isTransliterating['name']}
-                    className="text-[7px] font-black text-bkash uppercase tracking-tighter bg-bkash-light/20 px-2 py-0.5 rounded-lg border border-bkash/5 disabled:opacity-50"
-                  >
-                    {isTransliterating['name'] ? 'Converting...' : 'Convert to বাংলা'}
-                  </motion.button>
-                </div>
-                <input name="name" required value={formValues.name} onChange={handleFormInputChange} placeholder="যেমন: Md. Rahim Mia" className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-[8px] font-bold" />
+                <label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1.5"><Users className="w-3.5 h-3.5" /> গ্রাহকের নাম *</label>
+                <input name="name" required value={formValues.name} onChange={handleFormInputChange} placeholder="যেমন: মোঃ রহিম মিয়া / Md. Rahim Mia" className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200/70 focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-xs font-bold" />
               </div>
               <div className="space-y-1.5">
-                <label className="text-[8px] font-bold text-slate-400 uppercase flex items-center gap-1.5"><Users className="w-3 h-3" /> পূর্ণ নাম (বাংলা) *</label>
-                <input name="nameBn" required value={formValues.nameBn} onChange={handleFormInputChange} placeholder="যেমন: মোঃ রহিম মিয়া" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-[8px] font-bold" />
+                <label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1.5"><UserCheck className="w-3.5 h-3.5" /> চুক্তিধারীর নাম *</label>
+                <input name="chukirdharirName" required value={formValues.chukirdharirName} onChange={handleFormInputChange} placeholder="যেমন: মোঃ শাহিন / Md. Shahin" className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200/70 focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-xs font-bold" />
               </div>
-
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-[8px] font-bold text-slate-400 uppercase flex items-center gap-1.5"><UserCheck className="w-3 h-3" /> চুক্তিধারীর নাম (English) *</label>
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    type="button"
-                    onClick={() => handleTransliterate('chukirdharirName')}
-                    disabled={isTransliterating['chukirdharirName']}
-                    className="text-[7px] font-black text-bkash uppercase tracking-tighter bg-bkash-light/20 px-2 py-0.5 rounded-lg border border-bkash/5 disabled:opacity-50"
-                  >
-                    {isTransliterating['chukirdharirName'] ? 'Converting...' : 'Convert to বাংলা'}
-                  </motion.button>
-                </div>
-                <input name="chukirdharirName" required value={formValues.chukirdharirName} onChange={handleFormInputChange} placeholder="যেমন: Md. Shahin" className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-[8px] font-bold" />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[8px] font-bold text-slate-400 uppercase flex items-center gap-1.5"><UserCheck className="w-3 h-3" /> চুক্তিধারীর নাম (বাংলা) *</label>
-                <input name="chukirdharirNameBn" required value={formValues.chukirdharirNameBn} onChange={handleFormInputChange} placeholder="যেমন: মোঃ শাহিন" className="w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-[8px] font-bold" />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[8px] font-bold text-slate-400 uppercase flex items-center gap-1.5"><Phone className="w-3 h-3" /> মোবাইল নম্বর *</label>
-                <input name="mobile" required value={formValues.mobile} onChange={handleFormInputChange} placeholder="01XXXXXXXXX" className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-transparent focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-[8px] font-bold" />
+              <div className="col-span-1 sm:col-span-2 space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1.5"><Phone className="w-3.5 h-3.5" /> মোবাইল নম্বর *</label>
+                <input name="mobile" required value={formValues.mobile} onChange={handleFormInputChange} placeholder="01XXXXXXXXX" className="w-full px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200/70 focus:border-bkash focus:bg-white focus:ring-4 focus:ring-bkash/10 outline-none transition-all text-xs font-bold" />
               </div>
               <div className="col-span-1 sm:col-span-2 space-y-1.5">
                 <label className="text-[8px] font-bold text-slate-400 uppercase flex items-center gap-1.5"><MapPin className="w-3 h-3" /> ঠিকানা *</label>
